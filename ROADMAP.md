@@ -159,6 +159,19 @@ These already work in the open-source proxy today.
   read-only / read-write switch is useless" complaint
   ([HN](https://news.ycombinator.com/item?id=46696348)).
 
+- **Turn on protection for your situation, not one rule at a time.**
+  Rules come grouped into named packs you switch on and off, so you enable the
+  protections that match your regulations and industry without writing them from
+  scratch.
+  *For example:* a payments team turns on the PCI-DSS pack and the cardholder-data
+  environment becomes off-limits to assistants; a bank turns on the insider-trading
+  pack and restricted-list material is refused during a blackout window.
+  *Under the hood:* every rule carries a `pack:` label and each pack toggles
+  independently (`packs:` with `enabled:`), so the same engine ships a library of
+  ready-made bundles. Included: code of conduct, HIPAA, secrets and IP, financial
+  info-barriers, legal hold, prompt-injection, export control, data residency,
+  customer and CRM data, PCI-DSS, and insider trading and blackout windows.
+
 ## Next (in progress)
 
 - **Native OpenTelemetry, with retention and archive.**
