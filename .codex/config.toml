@@ -1,0 +1,11 @@
+[mcp_servers.aggrete]
+command = ".venv/bin/python"
+args = [
+    "-m",
+    "aggrete.proxy",
+    "--config",
+    "proxy.config.yaml",
+]
+
+[mcp_servers.aggrete.env]
+PYTHONPATH = "."

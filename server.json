@@ -6,15 +6,23 @@
     "url": "https://github.com/Aggrete/aggrete",
     "source": "github"
   },
-  "version": "0.6.1",
+  "version": "0.8.3",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "aggrete",
-      "version": "0.6.1",
+      "version": "0.8.3",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "runtimeHint": "uvx",
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--demo",
+          "description": "Run the self-contained Northwind demo server (bundled mock connectors and policy, no config or auth needed). For a real deployment, omit --demo and pass --config <proxy.config.yaml> to front your own MCP servers. See https://aggrete.com/guide"
+        }
+      ]
     }
   ]
 }

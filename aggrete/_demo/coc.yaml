@@ -1,0 +1,102 @@
+# Bundled demo policy for `aggrete --demo`. Northwind sample company.
+# A compact, illustrative subset of a real code of conduct, enough to show the
+# proxy refusing a forbidden combination, flagging a bulk extract, and reading a
+# call's arguments. Point Aggrete at your own policy with --config for the real thing.
+
+version: 1
+
+defaults:
+  window: 24h
+  entity_kind: person
+
+packs:
+  - id: code-of-conduct
+    name: Code of conduct
+    description: Stops assistants from combining records into things the handbook forbids.
+    example: "Personnel + budget + rota, refused before it forms."
+    watches: [hr-personnel, finance-comp, ops-rota]
+    enabled: true
+  - id: customer-data
+    name: Customer and CRM data
+    description: Keeps customer exports scoped to your own accounts.
+    example: "Export the whole customer base, refused; your team's accounts, fine."
+    watches: [crm-customers]
+    enabled: true
+
+rules:
+  - rule_id: COC-HR-004
+    pack: code-of-conduct
+    title: Combining personnel, budget and rotation records
+    clause: >
+      Personnel records, compensation or budget records, and operational rosters
+      may not be combined to derive the employment status or planned departure of
+      identifiable individuals.
+    owner: hr-privacy@northwind.example
+    severity: high
+    remediation: >
+      If this is sanctioned workforce planning, request a purpose-bound session
+      from HR Privacy; every retrieval under it is logged against the purpose.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: domain_join
+        domains: [hr-personnel, finance-comp, ops-rota]
+        require_entity_overlap: true
+        scope: user
+        window: 4h
+    tests:
+      - name: the_forbidden_trio
+        expect: deny
+        sequence:
+          - {domain: finance-comp, entities: [p:alice, p:bob, p:carol]}
+          - {domain: hr-personnel, entities: [p:alice, p:bob, p:carol]}
+          - {domain: ops-rota, entities: [p:alice]}
+      - name: two_domains_is_fine
+        expect: allow
+        sequence:
+          - {domain: finance-comp, entities: [p:alice, p:bob]}
+          - {domain: ops-rota, entities: [p:alice, p:bob]}
+
+  - rule_id: COC-HR-011
+    pack: code-of-conduct
+    title: Bulk lists of people
+    clause: >
+      Assistants may not assemble rosters of individuals from personnel systems
+      beyond what a single task requires.
+    owner: hr-privacy@northwind.example
+    severity: medium
+    remediation: Bulk personnel extracts go through People Analytics.
+    enforce:
+      - layer: accumulation
+        action: alert
+        type: entity_budget
+        domain: hr-personnel
+        max_distinct: 8
+        scope: user
+        window: 24h
+    tests:
+      - {name: small_lookup_is_fine, expect: allow, sequence: [{domain: hr-personnel, entities: [p:a, p:b]}]}
+      - name: roster_reconstruction_alerts
+        expect: alert
+        sequence:
+          - {domain: hr-personnel, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i]}
+
+  - rule_id: COC-CRM-001
+    pack: customer-data
+    title: Customer exports are scoped to your accounts
+    clause: >
+      A customer export may cover your own team's accounts, not the whole
+      company's customer base.
+    owner: data-governance@northwind.example
+    severity: high
+    remediation: Export with scope=team; a full-base export goes through analytics.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: arg_match
+        tools: ["crm__export*", "*customer*export*", "*__bulk_export*"]
+        deny_when:
+          - {arg: scope, in: [all, company, everyone, global]}
+    tests:
+      - {name: team_scope_is_fine, expect: allow, tool: crm__export, args: {scope: team}}
+      - {name: whole_base_is_refused, expect: deny, tool: crm__export, args: {scope: all}}

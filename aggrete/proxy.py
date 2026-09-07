@@ -666,7 +666,7 @@ async def main() -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--demo", action="store_true",
-                    help="run a self-contained four-question walkthrough and exit (no config or auth)")
+                    help="self-contained demo: a terminal walkthrough when run in a shell, or a real MCP server (bundled mock connectors and policy, no config) when a client attaches over stdio")
     ap.add_argument("--version", action="store_true",
                     help="print package version and exit")
     args = ap.parse_args()
@@ -676,22 +676,32 @@ async def main() -> None:
         print(f"aggrete {version('aggrete')}")
         return
 
-    if args.demo:
+    if args.demo and sys.stdin.isatty() and sys.stdout.isatty():
+        # A person at a terminal: run the guided walkthrough and exit.
         from ._demo import run
         run()
         return
 
-    if not Path(args.config).exists():
-        print(
-            f"aggrete: no config file at {args.config!r}.\n\n"
-            f"  Try the demo (no config needed):   aggrete --demo\n"
-            f"  Point it at your own config:       aggrete --config /path/to/proxy.config.yaml\n"
-            f"  Get started in 15 minutes:         https://aggrete.com/guide",
-            file=sys.stderr)
-        raise SystemExit(1)
-    cfg = yaml.safe_load(Path(args.config).read_text())
-    root = Path(args.config).parent
-    cfg["_config_dir"] = str(root)
+    if args.demo:
+        # A client attached over stdio: run a real, self-contained demo MCP
+        # server (bundled mock upstreams + bundled policy, no config, no auth).
+        from ._demo import demo_config, DEMO_DIR
+        cfg = demo_config()
+        root = DEMO_DIR
+        cfg["_config_dir"] = str(root)
+        args.transport = "stdio"
+    else:
+        if not Path(args.config).exists():
+            print(
+                f"aggrete: no config file at {args.config!r}.\n\n"
+                f"  Try the demo (no config needed):   aggrete --demo\n"
+                f"  Point it at your own config:       aggrete --config /path/to/proxy.config.yaml\n"
+                f"  Get started in 15 minutes:         https://aggrete.com/guide",
+                file=sys.stderr)
+            raise SystemExit(1)
+        cfg = yaml.safe_load(Path(args.config).read_text())
+        root = Path(args.config).parent
+        cfg["_config_dir"] = str(root)
     engine = Engine(str(root / cfg.get("coc", "coc.yaml")), build_store(cfg.get("store")),
                     pack_state_path=cfg.get("pack_state"))
     from .forward import build_forwarder

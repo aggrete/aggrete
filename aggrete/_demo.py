@@ -98,6 +98,61 @@ _SCENARIOS = [
 ]
 
 
+import sys
+from pathlib import Path
+
+DEMO_DIR = Path(__file__).parent / "_demo"
+
+_DEMO_INSTRUCTIONS = (
+    "Aggrete demo for the Northwind sample company. The mock hr, finance and ops "
+    "tools are governed by a bundled code of conduct. New here? Call "
+    "aggrete__scenarios for things to try, or aggrete__check to ask whether a plan "
+    "would be allowed, and why, without fetching anything. Point Aggrete at your "
+    "own MCP servers with --config for the real thing: https://aggrete.com/guide"
+)
+
+_DEMO_SCENARIOS = """Things to try in this demo. Run any for real, or preview with aggrete__check (nothing is fetched).
+
+  1. A combination the code of conduct forbids. Call hr__recent_joiners, then
+     finance__budget_roles, then ops__oncall_draft for the same team. Combining
+     personnel, budget and rota to profile people is refused (COC-HR-004).
+
+  2. Ask before you act. aggrete__check takes a list of tool calls and returns the
+     decision, the rule and the fix, without running anything. Try
+     ["hr__recent_joiners", "finance__budget_roles", "ops__oncall_draft"].
+
+  3. A rule that reads the arguments, not just the tool. Run aggrete__check with
+     [{"tool": "crm__export", "args": {"scope": "all"}}] to see a company-wide
+     customer export refused, while scope "team" is allowed (COC-CRM-001).
+"""
+
+
+def demo_config() -> dict:
+    """A fully self-contained proxy config for `aggrete --demo` when a client
+    attaches over stdio: bundled mock upstreams and a bundled policy, no auth,
+    no external services."""
+    py = sys.executable
+    return {
+        "coc": "coc.yaml",  # resolved against DEMO_DIR
+        "user": "you@aggrete.demo",
+        "instructions": _DEMO_INSTRUCTIONS,
+        "scenarios": _DEMO_SCENARIOS,
+        "brand": {"title": "Aggrete demo", "website_url": "https://aggrete.com"},
+        "upstreams": {
+            "hr": {"command": py, "args": ["-m", "aggrete._mockco", "--profile", "hr"]},
+            "finance": {"command": py, "args": ["-m", "aggrete._mockco", "--profile", "finance"]},
+            "ops": {"command": py, "args": ["-m", "aggrete._mockco", "--profile", "ops"]},
+        },
+        "domains": {
+            "finance__headcount_plan": "finance-planning",
+            "finance__*": "finance-comp",
+            "hr__*": "hr-personnel",
+            "ops__*": "ops-rota",
+        },
+        "default_domain": "unclassified",
+    }
+
+
 def run() -> None:
     on = sys.stdout.isatty()
 
