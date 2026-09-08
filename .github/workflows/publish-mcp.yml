@@ -1,6 +1,6 @@
 name: Publish to MCP Registry
 
-# Publishes server.json to the official MCP Registry under io.github.Aggrete/aggrete.
+# Publishes server.json to the official MCP Registry under io.github.aggrete/aggrete.
 # OIDC proves the workflow runs in the Aggrete org's repo, which is how the org
 # namespace is authorized (the interactive OAuth app cannot grant it).
 on:

@@ -472,4 +472,4 @@ owner named in the rule.
 
 ---
 
-<sub>mcp-name: io.github.Aggrete/aggrete</sub>
+<sub>mcp-name: io.github.aggrete/aggrete</sub>

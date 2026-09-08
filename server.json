@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.Aggrete/aggrete",
+  "name": "io.github.aggrete/aggrete",
   "description": "MCP policy proxy: enforces a code of conduct across connectors before the upstream is called.",
   "repository": {
-    "url": "https://github.com/Aggrete/aggrete",
+    "url": "https://github.com/aggrete/aggrete",
     "source": "github"
   },
   "version": "0.8.3",
