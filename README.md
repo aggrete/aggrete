@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/aggrete)](https://pypi.org/project/aggrete/)
 [![Python versions](https://img.shields.io/pypi/pyversions/aggrete)](https://pypi.org/project/aggrete/)
-[![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/Aggrete/aggrete/blob/main/LICENSE)
+[![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/aggrete/aggrete/blob/main/LICENSE)
 [![Glama quality](https://glama.ai/mcp/servers/Aggrete/aggrete/badges/score.svg)](https://glama.ai/mcp/servers/Aggrete/aggrete)
 
 <p align="center"><img src="docs/demo.gif" alt="Aggrete previews a plan with the check tool, then refuses the fourth call before the upstream is contacted" width="720"></p>
