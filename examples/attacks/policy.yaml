@@ -1,0 +1,40 @@
+# Policy used by the attack repros in this folder. Two rules, enough to stop the
+# two best-known MCP attacks. Real deployments layer more on top; see coc.yaml.
+
+version: 1
+defaults: {window: 24h, entity_kind: person}
+
+packs:
+  - id: prompt-injection
+    name: Prompt-injection shield
+    description: Once a session reads untrusted content, it cannot reach an egress domain.
+    example: "Poisoned issue, private-repo leak stopped."
+    watches: [public-issues, private-repos]
+    enabled: true
+
+rules:
+  - rule_id: FLOW-001
+    pack: prompt-injection
+    title: No egress after reading untrusted content
+    clause: >
+      Once an assistant has read untrusted or external content in a session, it
+      may not then send data outward through another tool. Any write counts as
+      egress.
+    owner: security@example.com
+    severity: critical
+    remediation: >
+      Start a fresh session for the outbound step, or have a person review and
+      send. The taint does not cross sessions.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: flow
+        taint_domains: [public-issues, untrusted-web]
+        egress_domains: [private-repos, external-share]
+    tests:
+      - {name: egress_without_taint_is_fine, expect: allow, sequence: [{domain: private-repos, entities: []}]}
+      - name: egress_after_untrusted_is_blocked
+        expect: deny
+        sequence:
+          - {domain: public-issues, entities: []}
+          - {domain: private-repos, entities: []}
