@@ -5,7 +5,6 @@
 [![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/aggrete/aggrete/blob/main/LICENSE)
 [![Glama quality](https://glama.ai/mcp/servers/Aggrete/aggrete/badges/score.svg)](https://glama.ai/mcp/servers/Aggrete/aggrete)
 
-<p align="center"><a href="https://try.aggrete.com"><img src="docs/demo.gif" alt="Aggrete refuses the lethal-trifecta MCP attack: once a session reads untrusted content, egress is closed before anything is fetched" width="760"></a></p>
 <p align="center"><a href="https://try.aggrete.com"><b>Try it live</b></a>, nothing to install &nbsp;&middot;&nbsp; <code>uvx aggrete --demo</code> &nbsp;&middot;&nbsp; <code>python examples/attacks/lethal_trifecta.py</code></p>
 
 The open-source proxy. Product site: https://aggrete.com. This repo is the proxy and nothing else: engine, accumulator, ingest CLI, Helm chart.
