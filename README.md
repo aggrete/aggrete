@@ -45,12 +45,10 @@ Each call is fine alone. The third completes a forbidden set across three domain
 
 ## Learn more
 
-| | |
-|---|---|
-| **[Writing policy](docs/POLICY.md)** | The `coc.yaml` schema, rule types, `arg_match`, and generating a draft from your handbook with `aggrete-ingest` |
-| **[Deploying](docs/DEPLOY.md)** | Architecture, the deploy matrix, HTTP + OAuth, connecting Claude, and per-user credentials |
-| **[Building a connector](docs/CONNECTORS.md)** | Expose read/write tools and govern any system (Google Drive is the reference) |
-| **[Roadmap](ROADMAP.md)** | Shipped, in progress, and planned |
+- **[Writing policy](docs/POLICY.md)** — the `coc.yaml` schema, rule types, `arg_match`, and drafting from your handbook with `aggrete-ingest`
+- **[Deploying](docs/DEPLOY.md)** — architecture, the deploy matrix, HTTP + OAuth, connecting Claude, and per-user credentials
+- **[Building a connector](docs/CONNECTORS.md)** — expose read/write tools and govern any system (Google Drive is the reference)
+- **[Roadmap](ROADMAP.md)** — shipped, in progress, and planned
 
 ## Honest limitations
 
