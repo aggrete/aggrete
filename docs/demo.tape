@@ -1,21 +1,16 @@
 # Regenerate the README demo GIF. Run from the repo root:
-#   vhs docs/demo.tape
+#   PATH="$PWD/.venv/bin:$PATH" vhs docs/demo.tape
 # Produces docs/demo.gif. Needs a .venv with the package installed (pip install -e .).
 Output docs/demo.gif
 
-Set FontSize 14
-Set Width 820
-Set Height 620
-Set Padding 22
-Set TypingSpeed 55ms
+Set FontSize 13
+Set Width 900
+Set Height 700
+Set Padding 20
+Set TypingSpeed 50ms
 
-Hide
-Type "clear"
+Type "python examples/attacks/lethal_trifecta.py"
+Sleep 600ms
 Enter
-Show
-
-Type ".venv/bin/python demo/run_demo.py 2>/dev/null"
-Sleep 700ms
-Enter
-Sleep 11s
+Sleep 7s
 Sleep 2s
