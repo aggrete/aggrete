@@ -590,9 +590,14 @@ def build_http_app(server: Server, cfg: dict, connect):
 
     auth_cfg = cfg.get("auth")
     if not auth_cfg:
-        raise SystemExit("streamable-http requires an `auth:` block. Identity must come from a token")
+        raise SystemExit("streamable-http requires an `auth:` block. Identity must come from a token, "
+                         "or set `auth: {mode: anonymous}` for a public no-auth demo (mock data only).")
+    anonymous = auth_cfg.get("mode") == "anonymous"
     signin = None
-    if auth_cfg.get("mode") == "builtin":
+    verifier = None
+    if anonymous:
+        pass  # deliberately unauthenticated: identity is the static `user`. Public demos only.
+    elif auth_cfg.get("mode") == "builtin":
         from mcp.server.auth.provider import ProviderTokenVerifier
         from .signin import BuiltinAuthServer
         users = {k: expand_env(str(v)) for k, v in (auth_cfg.get("users") or {}).items()}
@@ -642,9 +647,14 @@ def build_http_app(server: Server, cfg: dict, connect):
             authorization_servers=[AnyHttpUrl(auth_cfg["issuer"])] if auth_cfg.get("issuer") else [],
             scopes_supported=auth_cfg.get("required_scopes"), resource_name="aggrete")
         metadata_url = build_resource_metadata_url(AnyHttpUrl(resource_url))
-    routes.append(Route("/mcp", endpoint=RequireAuthMiddleware(
-        manager.handle_request, auth_cfg.get("required_scopes") or [], metadata_url),
-        methods=["GET", "POST", "DELETE"]))
+    class _RawASGI:  # Starlette treats a bound method as a request handler; wrap so /mcp is ASGI.
+        def __init__(self, app):
+            self._app = app
+        async def __call__(self, scope, receive, send):
+            await self._app(scope, receive, send)
+    mcp_endpoint = (_RawASGI(manager.handle_request) if anonymous else RequireAuthMiddleware(
+        manager.handle_request, auth_cfg.get("required_scopes") or [], metadata_url))
+    routes.append(Route("/mcp", endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]))
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -653,10 +663,11 @@ def build_http_app(server: Server, cfg: dict, connect):
             async with manager.run():
                 yield
 
-    return Starlette(routes=routes, lifespan=lifespan, middleware=[
+    mw = [] if anonymous else [
         Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(verifier)),
         Middleware(AuthContextMiddleware),
-    ])
+    ]
+    return Starlette(routes=routes, lifespan=lifespan, middleware=mw)
 
 
 async def main() -> None:

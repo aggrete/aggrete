@@ -110,3 +110,25 @@ async def _bob_first_three(url):
             await s.call_tool(tool, {"team": "platform"})
     finally:
         await stack.aclose()
+
+
+def test_anonymous_mode_builds_app_without_auth():
+    from mcp.server.lowlevel import Server
+    from starlette.applications import Starlette
+    from aggrete.proxy import build_http_app
+    async def _noop(stack):
+        return None
+    cfg = {"user": "guest@demo", "auth": {"mode": "anonymous"}, "http": {"allowed_hosts": ["try.example"]}}
+    app = build_http_app(Server("t"), cfg, _noop)
+    assert isinstance(app, Starlette)
+    assert "/mcp" in [getattr(r, "path", None) for r in app.routes]
+    assert app.user_middleware == []          # anonymous: no bearer/auth middleware
+
+
+def test_http_without_auth_block_is_rejected():
+    from mcp.server.lowlevel import Server
+    from aggrete.proxy import build_http_app
+    async def _noop(stack):
+        return None
+    with pytest.raises(SystemExit):
+        build_http_app(Server("t"), {"user": "x"}, _noop)

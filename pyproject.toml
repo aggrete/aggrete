@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aggrete"
-version = "0.8.3"
+version = "0.8.4"
 description = "An MCP proxy that enforces your code of conduct across connectors. Permission is not need-to-know."
 readme = "README.md"
 license = { text = "Apache-2.0" }

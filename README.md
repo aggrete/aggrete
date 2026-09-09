@@ -268,7 +268,7 @@ identity come from the token:
 python -m aggrete.proxy --config proxy.config.yaml --transport streamable-http --host 0.0.0.0 --port 8080
 ```
 
-HTTP mode refuses to start without an `auth:` block. In `jwt` mode it validates
+HTTP mode refuses to start without an `auth:` block, unless you explicitly opt in with `auth: {mode: anonymous}` for a public no-auth demo (mock data only, rate-limit it): then identity is the static `user:` and there is no token. In `jwt` mode it validates
 bearer JWTs from your IdP (issuer, audience, expiry, signature via JWKS,
 required scopes) and derives the user from the `email` claim. Configurable
 with `identity_claim`. Every request without a valid token is a 401 with an
