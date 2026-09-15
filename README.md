@@ -49,6 +49,7 @@ Each call is fine alone. The third completes a forbidden set across three domain
 - **[Deploying](docs/DEPLOY.md)** — architecture, the deploy matrix, HTTP + OAuth, connecting Claude, and per-user credentials
 - **[Building a connector](docs/CONNECTORS.md)** — expose read/write tools and govern any system (Google Drive is the reference)
 - **[Roadmap](ROADMAP.md)** — shipped, in progress, and planned
+- **[Agent skill](skills/aggrete/SKILL.md)** — teach Claude Code or any MCP client to set up and operate Aggrete: `/plugin marketplace add aggrete/aggrete`, or read `skill://aggrete/SKILL.md` from a running proxy
 
 ## Honest limitations
 

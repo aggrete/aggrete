@@ -172,6 +172,17 @@ These already work in the open-source proxy today.
   info-barriers, legal hold, prompt-injection, export control, data residency,
   customer and CRM data, PCI-DSS, and insider trading and blackout windows.
 
+- **Your assistant already knows how to run it** *(shipped in 0.9)*.
+  Aggrete ships its own skill: an operator's guide the assistant reads once and
+  can then write and test rules, wire a connector, or explain a refusal from the
+  audit log without being handed the docs.
+  *For example:* in Claude Code, `/plugin marketplace add aggrete/aggrete` then
+  `/plugin install aggrete@aggrete`; any other MCP client reads
+  `skill://aggrete/SKILL.md` straight from the running proxy.
+  *Under the hood:* `skills/aggrete/` is a Claude Code plugin; the same files
+  ship in the wheel and are served as MCP resources by the proxy, with a test
+  keeping the copies identical.
+
 ## Next (in progress)
 
 - **Native OpenTelemetry, with retention and archive.**

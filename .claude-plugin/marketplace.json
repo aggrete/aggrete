@@ -1,0 +1,14 @@
+{
+  "name": "aggrete",
+  "description": "Skills for Aggrete, the open-source MCP policy proxy.",
+  "owner": {
+    "name": "Aggrete"
+  },
+  "plugins": [
+    {
+      "name": "aggrete",
+      "source": "./",
+      "description": "Skill for setting up and operating the Aggrete MCP policy proxy."
+    }
+  ]
+}

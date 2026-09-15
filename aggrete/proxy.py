@@ -219,6 +219,19 @@ class Proxy:
             await session.initialize()
             yield session
 
+    async def list_resources(self, ctx, params) -> types.ListResourcesResult:
+        """The Aggrete skill (operator's guide) as skill:// resources, so any
+        client can read how to write policy and run the proxy."""
+        from . import skill
+        return types.ListResourcesResult(resources=skill.list_resources())
+
+    async def read_resource(self, ctx, params: types.ReadResourceRequestParams) -> types.ReadResourceResult:
+        from . import skill
+        result = skill.read_resource(params.uri)
+        if result is None:
+            raise ValueError(f"unknown resource: {params.uri}")
+        return result
+
     async def list_tools(self, ctx, params) -> types.ListToolsResult:
         tools: list[types.Tool] = []
         for upstream, session in self.sessions.items():
@@ -737,6 +750,8 @@ async def main() -> None:
         icons=icons,
         on_list_tools=proxy.list_tools,
         on_call_tool=proxy.call_tool,
+        on_list_resources=proxy.list_resources,
+        on_read_resource=proxy.read_resource,
     )
 
     if args.transport == "streamable-http":

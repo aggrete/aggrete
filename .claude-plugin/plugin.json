@@ -1,0 +1,9 @@
+{
+  "name": "aggrete",
+  "description": "Set up and operate Aggrete, the open-source MCP policy proxy: write and test coc.yaml rules, wire connectors, deploy over HTTP with OIDC, read the audit log.",
+  "version": "1.0.0",
+  "author": { "name": "Aggrete" },
+  "homepage": "https://aggrete.com",
+  "repository": "https://github.com/aggrete/aggrete",
+  "license": "Apache-2.0"
+}
