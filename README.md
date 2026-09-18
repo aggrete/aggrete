@@ -42,6 +42,7 @@ Each call is fine alone. The third completes a forbidden set across three domain
 - **Holds upstream credentials itself** (confused-deputy safe), with optional per-user on-behalf-of access.
 - **Audits tamper-evidently** — every decision is one hash-chained JSON line (`aggrete-audit`), optionally forwarded to a SIEM.
 - **Ask before you act** — `check` previews any sequence, `scenarios` lists things to try.
+- **Hold for a human** — `action: approve` pauses a call until the clause owner approves it, from Slack, the terminal, or the console; the approval is a time-limited, audited grant.
 
 ## Learn more
 

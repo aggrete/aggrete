@@ -123,6 +123,16 @@ rate_limit:
   max_calls: 120
   window: 1m
 
+# Human-in-the-loop. Rules with `action: approve` hold the call here until an
+# approver grants it (aggrete approve <id>, POST /approvals/<id>/approve, or the
+# console). State lives in this file, or in Redis when `store:` is set.
+# approvals:
+#   file: approvals.json
+#   ttl: 4h
+#   approvers: [security@example.com]     # plus each rule's own `owner`
+#   wait: 0                               # seconds to hold the call open for a quick decision (max 45)
+#   notify: {webhook: "${SLACK_WEBHOOK}"} # or command: [/opt/aggrete/notify.sh]
+
 # Inbound secret scanning: scan tool arguments for credential-shaped strings
 # before they are forwarded upstream. `true` uses the credential set
 # (aws_key, api_key, bearer); or list rule names. `scan_inbound_action` is

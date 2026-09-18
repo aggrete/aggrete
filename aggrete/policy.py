@@ -80,12 +80,14 @@ class Decision:
     evidence: dict = field(default_factory=dict)
     alerts: list[dict] = field(default_factory=list)
     granted_purpose: str | None = None
+    needs_approval: bool = False   # the rule's action is `approve`: hold until an approver grants it
 
     def explain(self) -> str:
         if self.allow:
             return "allowed"
+        head = f"Held for approval under {self.rule_id}." if self.needs_approval else f"Blocked by {self.rule_id}."
         return (
-            f"Blocked by {self.rule_id}.\n\n"
+            f"{head}\n\n"
             f"{' '.join((self.clause or '').split())}\n\n"
             f"{' '.join((self.remediation or '').split())}\n\n"
             f"Rule owner: {self.owner}"
@@ -150,6 +152,14 @@ def in_scope(e: dict, user: str, now: float | None = None) -> bool:
     if until and now >= until:
         return False
     return True
+
+
+def gate(e: dict, default: str = "deny") -> str | None:
+    """What an enforce block does when it fires. `deny` refuses, `approve` holds the
+    call until an approver grants a time-limited exception, `alert` (or anything
+    else) only records. Returns None for the record-only case."""
+    a = e.get("action", default)
+    return a if a in ("deny", "approve") else None
 
 
 def applies_to(e: dict, is_write: bool) -> bool:
@@ -255,27 +265,35 @@ class Engine:
                 is_egress = domain in e.get("egress_domains", []) or (is_write and e.get("egress_on_write", True))
                 if not is_egress or not in_scope(e, user):
                     continue
-                if e.get("action", "deny") != "deny":
+                act = gate(e)
+                if act is None:
                     continue
                 tainted = [t for t in e.get("taint_domains", []) if t in store.domains(user)]
                 if tainted:
                     if purpose := store.granted(user, rule.id):
                         return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
-                    return self._deny(rule, {"egress": domain, "tainted_by": tainted})
+                    return self._deny(rule, {"egress": domain, "tainted_by": tainted}, approve=act == "approve")
             for e in rule.blocks("domain_block"):
-                if domain in e["domains"] and e.get("action", "deny") == "deny" and in_scope(e, user) and applies_to(e, is_write):
-                    return self._deny(rule, {"domain": domain})
+                act = gate(e)
+                if domain in e["domains"] and act and in_scope(e, user) and applies_to(e, is_write):
+                    # `deny` here is deliberately not waivable by a purpose grant (legal hold);
+                    # `approve` is, since an approval is exactly a grant.
+                    if act == "approve" and (purpose := store.granted(user, rule.id)):
+                        return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
+                    return self._deny(rule, {"domain": domain}, approve=act == "approve")
 
             for e in rule.blocks("wall"):
                 # Embargoes, investigation walls, privilege: who may reach a domain, and until when.
                 if domain not in e["domains"] or not in_scope(e, user) or not applies_to(e, is_write):
                     continue
-                if e.get("action", "deny") != "deny":
+                act = gate(e)
+                if act is None:
                     continue
                 if purpose := store.granted(user, rule.id):
                     return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
                 return self._deny(rule, {"domain": domain, "until": e.get("until"),
-                                         "allowed_users": e.get("allowed_users"), "blocked_users": e.get("blocked_users")})
+                                         "allowed_users": e.get("allowed_users"), "blocked_users": e.get("blocked_users")},
+                                  approve=act == "approve")
 
             for e in rule.blocks("domain_join"):
                 if domain not in e["domains"] or not in_scope(e, user):
@@ -289,7 +307,8 @@ class Engine:
                         continue
                 else:
                     overlap = set()
-                if e.get("action", "deny") != "deny":
+                act = gate(e)
+                if act is None:
                     continue
                 if purpose := store.granted(user, rule.id):
                     return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
@@ -297,6 +316,7 @@ class Engine:
                     rule,
                     {"completes": e["domains"], "already_held": already,
                      "shared_entities": sorted(overlap)[:10]},
+                    approve=act == "approve",
                 )
         return Decision(allow=True)
 
@@ -315,12 +335,13 @@ class Engine:
                     continue
                 if not in_scope(e, user) or not _arg_matches(e.get("deny_when", []), args):
                     continue
-                if e.get("action", "deny") != "deny":
+                act = gate(e)
+                if act is None:
                     return Decision(allow=True, rule_id=rule.id,
                                     alerts=[{"rule_id": rule.id, "tool": tool}])
                 if purpose := store.granted(user, rule.id):
                     return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
-                return self._deny(rule, {"tool": tool, "matched": e.get("deny_when")})
+                return self._deny(rule, {"tool": tool, "matched": e.get("deny_when")}, approve=act == "approve")
         return Decision(allow=True)
 
     def tool_visible(self, user: str, domain: str | None) -> bool:
@@ -369,8 +390,9 @@ class Engine:
                 n = len(set(entities))
                 if 0 < n < int(e.get("k", 10)):
                     hit = {"rule_id": rule.id, "domain": domain, "people": n, "k": int(e.get("k", 10))}
-                    if e.get("action", "alert") == "deny" and not store.granted(user, rule.id):
-                        return self._deny(rule, hit)
+                    act = gate(e, "alert")
+                    if act and not store.granted(user, rule.id):
+                        return self._deny(rule, hit, approve=act == "approve")
                     alerts.append(hit)
 
             for e in rule.blocks("entity_budget"):
@@ -380,8 +402,9 @@ class Engine:
                 if count > e["max_distinct"]:
                     hit = {"rule_id": rule.id, "domain": e["domain"],
                            "distinct": count, "max": e["max_distinct"]}
-                    if e.get("action", "alert") == "deny" and not store.granted(user, rule.id):
-                        return self._deny(rule, hit)
+                    act = gate(e, "alert")
+                    if act and not store.granted(user, rule.id):
+                        return self._deny(rule, hit, approve=act == "approve")
                     alerts.append(hit)
 
             for e in rule.blocks("self_comparison"):
@@ -395,8 +418,9 @@ class Engine:
                 if me in seen and others:
                     hit = {"rule_id": rule.id, "domain": domain, "self": me,
                            "others": others[:10], "distinct_others": len(others)}
-                    if e.get("action", "alert") == "deny" and not store.granted(user, rule.id):
-                        return self._deny(rule, hit)
+                    act = gate(e, "alert")
+                    if act and not store.granted(user, rule.id):
+                        return self._deny(rule, hit, approve=act == "approve")
                     alerts.append(hit)
 
             for e in rule.blocks("domain_join"):
@@ -407,14 +431,16 @@ class Engine:
                 overlap = set.intersection(*[store.entities(user, d) for d in e["domains"]])
                 if e.get("require_entity_overlap", True) and not overlap:
                     continue
-                if e.get("action", "deny") != "deny":
+                act = gate(e)
+                if act is None:
                     alerts.append({"rule_id": rule.id, "overlap": sorted(overlap)[:10]})
                     continue
                 if purpose := store.granted(user, rule.id):
                     alerts.append({"rule_id": rule.id, "granted_purpose": purpose})
                     continue
                 return self._deny(rule, {"domains": e["domains"],
-                                         "shared_entities": sorted(overlap)[:10]}, alerts)
+                                         "shared_entities": sorted(overlap)[:10]}, alerts,
+                                  approve=act == "approve")
 
         return Decision(allow=True, alerts=alerts)
 
@@ -441,15 +467,15 @@ class Engine:
             if tool and step.get("args"):
                 ad = self.check_args(user, tool, step["args"], store=sim)
                 if not ad.allow:
-                    results.append({"step": step, "verdict": "deny", "decision": ad})
+                    results.append({"step": step, "verdict": "hold" if ad.needs_approval else "deny", "decision": ad})
                     return results, i
             pre = self.pre_call(user, domain, is_write=is_write, store=sim)
             if not pre.allow:
-                results.append({"step": step, "verdict": "deny", "decision": pre})
+                results.append({"step": step, "verdict": "hold" if pre.needs_approval else "deny", "decision": pre})
                 return results, i
             post = self.post_call(user, domain, ents, store=sim)
             if not post.allow:
-                results.append({"step": step, "verdict": "deny", "decision": post})
+                results.append({"step": step, "verdict": "hold" if post.needs_approval else "deny", "decision": post})
                 return results, i
             results.append({"step": step, "verdict": "alert" if post.alerts else "allow",
                             "decision": post})
@@ -461,6 +487,6 @@ class Engine:
         """The escape valve. Without a workable one, users route around the system."""
         self.store.grant(user, rule_id, ttl_s, purpose)
 
-    def _deny(self, rule: Rule, evidence: dict, alerts: list | None = None) -> Decision:
+    def _deny(self, rule: Rule, evidence: dict, alerts: list | None = None, approve: bool = False) -> Decision:
         return Decision(False, rule.id, rule.clause, rule.owner, rule.remediation,
-                        evidence, alerts or [])
+                        evidence, alerts or [], needs_approval=approve)

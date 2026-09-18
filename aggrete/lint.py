@@ -80,8 +80,8 @@ def lint(coc_path: str, config_path: str | None = None) -> list[Finding]:
 
         tests = r.get("tests", [])
         expects = {t.get("expect") for t in tests}
-        if "allow" not in expects or not (expects & {"deny", "alert"}):
-            findings.append(Finding("warn", rid, "should carry at least one allow and one deny/alert test"))
+        if "allow" not in expects or not (expects & {"deny", "alert", "hold"}):
+            findings.append(Finding("warn", rid, "should carry at least one allow and one deny/alert/hold test"))
 
         for e in r.get("enforce", []):
             kind = e.get("type")
@@ -98,8 +98,8 @@ def lint(coc_path: str, config_path: str | None = None) -> list[Finding]:
                     findings.append(Finding("warn", rid, "flow has no taint_domains; nothing will ever taint a session"))
 
             action = e.get("action", "deny")
-            if action not in ("deny", "alert"):
-                findings.append(Finding("error", rid, f"unknown action {action!r} (use deny or alert)"))
+            if action not in ("deny", "alert", "approve"):
+                findings.append(Finding("error", rid, f"unknown action {action!r} (use deny, approve or alert)"))
             if action == "alert" and r.get("severity") in HIGH:
                 findings.append(Finding("warn", rid,
                                         f"severity {r.get('severity')} but only alerts; a leak would be logged, not stopped"))

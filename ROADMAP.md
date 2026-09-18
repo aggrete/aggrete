@@ -183,6 +183,18 @@ These already work in the open-source proxy today.
   ship in the wheel and are served as MCP resources by the proxy, with a test
   keeping the copies identical.
 
+- **Hold a call for a person to approve** *(shipped in 0.10)*.
+  A rule can say `approve` instead of `deny`. The call pauses before anything
+  is fetched, the clause owner is notified, and once they approve, the same
+  request goes through for a limited time, with their name on every line.
+  *For example:* reading the restructuring plan is held; the CHRO runs
+  `aggrete approve 3f9c1a2b7e` or clicks approve, and the manager's retry works
+  for four hours.
+  *Under the hood:* `action: approve` on any rule block; approvals are purpose
+  grants in a file or Redis; `aggrete approvals|approve|deny`, `GET/POST
+  /approvals` over HTTP, Slack webhook or command notifier. The "human-in-the-loop
+  gate at the proxy" ask ([HN](https://news.ycombinator.com/item?id=43676771)).
+
 ## Next (in progress)
 
 - **Native OpenTelemetry, with retention and archive.**
@@ -193,14 +205,6 @@ These already work in the open-source proxy today.
   ([agentic-community#413](https://github.com/agentic-community/mcp-gateway-registry/issues/413)).
 
 ## Planned
-
-- **Ask a human to approve the most sensitive actions.**
-  For a small set of high-stakes requests, pause and require a person to sign off
-  before it happens.
-  *For example:* an assistant can draft an email to all staff, but a manager has to
-  click "approve" before it actually sends.
-  *Under the hood:* human-in-the-loop approval gate held at the proxy boundary
-  ([HN](https://news.ycombinator.com/item?id=43676771)).
 
 - **Give each tool only the narrow permission it needs.**
   A tool gets exactly the access required for its job and nothing more.

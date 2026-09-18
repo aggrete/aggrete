@@ -15,12 +15,12 @@ compile to several mechanisms.
     ...
   enforce:
     - layer: retrieval | accumulation
-      action: deny | alert
+      action: deny | alert | approve   # approve = hold until an approver grants a time-limited exception
       type: <one of the types below>
       applies: read | write  # optional; default both. `write` targets egress tools only
       ...type-specific fields
   tests:
-    - ...                    # at least one `expect: allow` and one `expect: deny` or `alert`
+    - ...                    # at least one `expect: allow` and one `expect: deny`, `alert`, or `hold`
 ```
 
 `layer: retrieval` blocks decide from the request alone (pre-call).
@@ -224,3 +224,17 @@ A permanent block gets routed around. `engine.grant_purpose(user, rule_id,
 purpose, ttl_s)` opens a scoped exception and stamps every retrieval made under
 it with the stated purpose. Wire it to an approval flow owned by the clause
 owner named in `remediation`.
+
+## Approvals (`action: approve`)
+
+Any block can say `action: approve` instead of `deny`. The engine returns a
+hold: the proxy records a pending request (id derived from user + rule),
+notifies, audits `decision: hold`, and tells the assistant to retry once it is
+approved. An approval is a purpose grant for (user, rule) with a TTL, so the
+retry passes through the normal `granted` path and every row carries
+`purpose: approved by <who>`. Tests for such rules use `expect: hold`.
+
+Approvers: the `approvals.approvers` list in `proxy.config.yaml`, plus the
+rule's own `owner`. Decide with `aggrete approvals | approve <id> | deny <id>`
+on the proxy host, or `GET /approvals` and `POST /approvals/<id>/approve|deny`
+over HTTP with the approver's bearer token.

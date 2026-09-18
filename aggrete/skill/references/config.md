@@ -114,6 +114,17 @@ scan_inbound: true                  # scan tool arguments for credential-shaped 
 scan_inbound_action: block          # block (default) or redact
 ```
 
+## Approvals (human-in-the-loop)
+
+```yaml
+approvals:
+  file: approvals.json              # next to the config; Redis is used when `store:` is set
+  ttl: 4h                           # default length of an approval
+  approvers: [security@example.com] # plus each rule's own `owner`
+  wait: 0                           # seconds to hold the call open for a quick decision (max 45)
+  notify: {webhook: "${SLACK_WEBHOOK}"}   # Slack-compatible; or command: [/path/to/notify.sh]
+```
+
 ## Tool integrity
 
 ```yaml

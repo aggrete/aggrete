@@ -94,7 +94,10 @@ rules:
 ```
 
 Start every new rule at `action: alert`, watch real traffic, then flip to
-`deny`. Rules can be grouped into `packs:` that an operator toggles as a unit.
+`deny`. A third action, `approve`, holds the call until the clause owner
+approves it (`aggrete approve <id>`, `POST /approvals/<id>/approve`, or the
+console); the approval is a time-limited, audited grant. Rules can be grouped
+into `packs:` that an operator toggles as a unit.
 
 ### Which rule type
 
@@ -108,6 +111,7 @@ Start every new rule at `action: alert`, watch real traffic, then flip to
 | A figure about fewer than k people is individual data | `min_group` | post-call |
 | No write after reading untrusted content | `flow` | pre-call |
 | Allowed or not depending on the call's arguments | `arg_match` | pre-call |
+| Any of the above, but a person must sign off first | same type, `action: approve` | held, then allowed |
 
 Field-by-field reference for each type, test-format details, and `deny_when`
 operators: [references/rule-types.md](references/rule-types.md).

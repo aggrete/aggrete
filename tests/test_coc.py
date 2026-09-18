@@ -25,10 +25,10 @@ def run_sequence(steps, user: str = "test@example.com") -> str:
     for step in steps:
         pre = engine.pre_call(user, step["domain"], is_write=step.get("write", False))
         if not pre.allow:
-            return "deny"
+            return "hold" if pre.needs_approval else "deny"
         post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])
         if not post.allow:
-            return "deny"
+            return "hold" if post.needs_approval else "deny"
         if post.alerts:
             outcome = "alert"
     return outcome
@@ -46,7 +46,7 @@ def run_args(tool, args, user: str = "test@example.com") -> str:
         engine.set_pack(_p["id"], True)
     d = engine.check_args(user, tool, args or {})
     if not d.allow:
-        return "deny"
+        return "hold" if d.needs_approval else "deny"
     return "alert" if d.alerts else "allow"
 
 
@@ -63,7 +63,7 @@ def test_every_rule_has_positive_and_negative_coverage():
     for rule in Engine(COC, MemoryStore()).rules:
         expectations = {t["expect"] for t in rule.tests}
         assert "allow" in expectations, f"{rule.id} has no allow test"
-        assert expectations & {"deny", "alert"}, f"{rule.id} has no deny/alert test"
+        assert expectations & {"deny", "alert", "hold"}, f"{rule.id} has no deny/alert/hold test"
 
 
 def test_purpose_grant_opens_a_scoped_window():

@@ -41,7 +41,7 @@ from .policy import Engine
 from .audit import Audit
 from .redact import rules_from_config, redact, BUILTIN as REDACT_BUILTIN
 from .accumulator import RedisStore
-from . import integrity, ratelimit, credentials
+from . import approvals as approvals_mod, integrity, ratelimit, credentials
 
 # Inbound scan default: credential-shaped patterns only, so a legitimate email or
 # id in an argument is not mistaken for a secret. Override with `scan_inbound:`.
@@ -93,6 +93,9 @@ class Proxy:
         names = (INBOUND_DEFAULT if sc is True else list(sc)) if sc else []
         self.inbound_rules = [(n, REDACT_BUILTIN[n]) for n in names if n in REDACT_BUILTIN]
         self.inbound_action = config.get("scan_inbound_action", "block")
+        # Human-in-the-loop: rules with `action: approve` hold the call here.
+        self.approvals = approvals_mod.from_config(config, redis_client)
+        self.approval_wait_s = float((config.get("approvals") or {}).get("wait", 0) or 0)
 
     @property
     def user(self) -> str:
@@ -374,10 +377,16 @@ class Proxy:
                         f"({', '.join(hits)}). Aggrete does not forward credentials into tools. "
                         "Remove it and retry.")
 
+        # Approvals already granted to this person become purpose grants, so the
+        # engine's normal `granted` path lets the held call through.
+        self._sync_approvals(self.user)
+
         # Argument-level rules: the same tool can be fine or forbidden depending
         # on what it is asked to do (export your team vs the whole company).
         argd = self.engine.check_args(self.user, name, args)
         if not argd.allow:
+            if argd.needs_approval:
+                return await self._hold(name, domain, is_write, argd, stage="pre")
             self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
                             decision="deny", rule=argd.rule_id, evidence=argd.evidence)
             return self._refuse(argd.explain())
@@ -385,6 +394,8 @@ class Proxy:
         # --- Layer 3/4, before the fetch -----------------------------------
         pre = self.engine.pre_call(self.user, domain, is_write=is_write)
         if not pre.allow:
+            if pre.needs_approval:
+                return await self._hold(name, domain, is_write, pre, stage="pre")
             self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
                             decision="deny", rule=pre.rule_id, evidence=pre.evidence)
             return self._refuse(pre.explain())
@@ -425,8 +436,53 @@ class Proxy:
 
         if not post.allow:
             # The data left the upstream, but it does not reach the model.
+            if post.needs_approval:
+                return await self._hold(name, domain, is_write, post, stage="post", audited=True)
             return self._refuse(post.explain())
         return result
+
+    # ---------- human-in-the-loop ----------
+
+    def _sync_approvals(self, user: str) -> None:
+        for a in self.approvals.approved_for(user):
+            if not self.engine.store.granted(user, a["rule_id"]):
+                ttl = max(1, int(a["expires_at"] - time.time()))
+                self.engine.grant_purpose(user, a["rule_id"], f"approved by {a.get('by')}", ttl)
+
+    def _approve_hint(self, rid: str) -> str:
+        url = (self.cfg.get("approvals") or {}).get("url") or (self.cfg.get("auth") or {}).get("resource_url")
+        if url:
+            base = url.rsplit("/mcp", 1)[0]
+            return f"POST {base}/approvals/{rid}/approve (an approver's token), or `aggrete approve {rid} --by <you>` on the proxy host"
+        return f"`aggrete approve {rid} --by <you>` on the proxy host"
+
+    async def _hold(self, name: str, domain: str, is_write: bool, d, stage: str, audited: bool = False):
+        """The rule says `approve`: record the request, notify, optionally wait a
+        little for a decision, and tell the assistant how to proceed."""
+        user = self.user
+        req, created = self.approvals.request(user, d.rule_id, name, domain, d.clause or "",
+                                              d.owner or "", d.remediation or "")
+        hint = self._approve_hint(req["id"])
+        if created:
+            self.approvals.notify(req, hint)
+        if not audited:
+            self.audit.emit(user=user, tool=name, domain=domain, stage=stage, write=is_write,
+                            decision="hold", rule=d.rule_id, evidence={**d.evidence, "approval": req["id"]})
+        # Optional short synchronous wait: useful for a chat-ops approver who is
+        # right there. Bounded so an MCP client never times out on us.
+        deadline = time.time() + min(self.approval_wait_s, 45)
+        while self.approval_wait_s and time.time() < deadline:
+            await asyncio.sleep(1.0)
+            if self.approvals.approved_for(user):
+                self._sync_approvals(user)
+                return self._refuse(
+                    f"Approved. Request {req['id']} was granted; retry {name} now and it will run.")
+        owner = d.owner or "the rule owner"
+        return self._refuse(
+            f"{d.explain()}\n\n"
+            f"This call is HELD, not refused. Approval request {req['id']} is pending with {owner}. "
+            f"Nothing was {'returned' if audited else 'fetched'}. Tell the user: once it is approved "
+            f"({hint}), retry the same call and it will go through for a limited time.")
 
     def _scan_inbound(self, args):
         """Walk argument values and mask secret-shaped strings, returning
@@ -511,9 +567,9 @@ class Proxy:
         return self._refuse(self._format_check(tools, steps, results, blocked_at, bool(supplied)))
 
     def _format_check(self, tools, steps, results, blocked_at, supplied) -> str:
-        head = "REFUSED" if blocked_at is not None else "allowed"
+        head = "allowed" if blocked_at is None else ("HELD for approval" if results[blocked_at]["verdict"] == "hold" else "REFUSED")
         out = [f"Plan check: {head}.", ""]
-        tag = {"allow": "allowed", "alert": "allowed (with an alert)", "deny": "REFUSED"}
+        tag = {"allow": "allowed", "alert": "allowed (with an alert)", "deny": "REFUSED", "hold": "HELD for approval"}
         for i, name in enumerate(tools):
             dom = steps[i]["domain"]
             if i >= len(results):
@@ -522,13 +578,13 @@ class Proxy:
             r = results[i]
             d = r["decision"]
             line = f"  {i + 1}. {name}  [{dom}]  ->  {tag[r['verdict']]}"
-            if r["verdict"] == "deny":
+            if r["verdict"] in ("deny", "hold"):
                 line += f"   {d.rule_id}"
             out.append(line)
             if r["verdict"] == "alert":
                 for a in d.alerts:
                     out.append(f"        alert {a.get('rule_id', '')}: {self._alert_phrase(a)}")
-            if r["verdict"] == "deny":
+            if r["verdict"] in ("deny", "hold"):
                 out += ["",
                         f"     {' '.join((d.clause or '').split())}",
                         f"     Fix: {' '.join((d.remediation or '').split())}",
@@ -584,7 +640,7 @@ def cli() -> None:
     asyncio.run(main())
 
 
-def build_http_app(server: Server, cfg: dict, connect):
+def build_http_app(server: Server, cfg: dict, connect, proxy_ref: "Proxy | None" = None):
     """Starlette app: bearer auth → auth context → MCP streamable HTTP at /mcp.
 
     `connect(stack)` is awaited inside the lifespan so upstream sessions live
@@ -668,6 +724,8 @@ def build_http_app(server: Server, cfg: dict, connect):
     mcp_endpoint = (_RawASGI(manager.handle_request) if anonymous else RequireAuthMiddleware(
         manager.handle_request, auth_cfg.get("required_scopes") or [], metadata_url))
     routes.append(Route("/mcp", endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]))
+    if proxy_ref is not None and not anonymous:
+        routes += approval_routes(proxy_ref, auth_cfg)
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -683,7 +741,62 @@ def build_http_app(server: Server, cfg: dict, connect):
     return Starlette(routes=routes, lifespan=lifespan, middleware=mw)
 
 
+def approval_routes(proxy: "Proxy", auth_cfg: dict) -> list:
+    """GET /approvals (pending), POST /approvals/{id}/approve|deny. The caller's
+    bearer token names the approver; configured approvers and the rule's own
+    clause owner may decide. Every decision is an audit row."""
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+
+    def who(request) -> str | None:
+        user = getattr(request, "user", None)
+        token = getattr(user, "access_token", None)
+        if token is None or not unexpired(token):
+            return None
+        return identity_for(token, auth_cfg.get("identity_claim"))
+
+    async def list_pending(request):
+        ident = who(request)
+        if ident is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        rows = proxy.approvals.pending()
+        return JSONResponse({"pending": [r for r in rows if proxy.approvals.can_approve(ident, r)],
+                             "approver": ident})
+
+    async def decide(request):
+        ident = who(request)
+        if ident is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        rid = request.path_params["rid"]; verb = request.path_params["verb"]
+        req = proxy.approvals.get(rid)
+        if not req:
+            return JSONResponse({"error": "no such request"}, status_code=404)
+        if not proxy.approvals.can_approve(ident, req):
+            return JSONResponse({"error": "not an approver for this rule"}, status_code=403)
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        if verb == "approve":
+            ttl = approvals_mod.parse_ttl(body.get("ttl")) if body.get("ttl") else None
+            req = proxy.approvals.approve(rid, ident, ttl, str(body.get("note", "")))
+        elif verb == "deny":
+            req = proxy.approvals.deny(rid, ident, str(body.get("note", "")))
+        else:
+            return JSONResponse({"error": "verb must be approve or deny"}, status_code=400)
+        proxy.audit.emit(user=req["user"], tool=",".join(req["tools"]), domain=req["domain"], stage="approval",
+                         write=False, decision=req["status"], rule=req["rule_id"],
+                         evidence={"approval": rid, "by": ident, "note": req.get("note", "")})
+        return JSONResponse({"request": req})
+
+    return [Route("/approvals", list_pending, methods=["GET"]),
+            Route("/approvals/{rid}/{verb}", decide, methods=["POST"])]
+
+
 async def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in ("approvals", "approve", "deny"):
+        raise SystemExit(approvals_mod.cli(sys.argv[1:]))
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="proxy.config.yaml")
     ap.add_argument("--transport", choices=["stdio", "streamable-http"], default="stdio")
@@ -756,7 +869,7 @@ async def main() -> None:
 
     if args.transport == "streamable-http":
         import uvicorn
-        app = build_http_app(server, cfg, proxy.connect)
+        app = build_http_app(server, cfg, proxy.connect, proxy_ref=proxy)
         config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
         await uvicorn.Server(config).serve()
         return
