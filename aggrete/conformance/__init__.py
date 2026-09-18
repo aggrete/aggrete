@@ -378,7 +378,27 @@ def cli(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="aggrete conformance")
     ap.add_argument("--format", choices=["text", "json", "md"], default="text")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--url", help="black-box: a streamable-HTTP MCP endpoint fronting the fixture connector")
+    ap.add_argument("--token", help="black-box: bearer token for --url")
+    ap.add_argument("--stdio", help='black-box: a command that serves MCP over stdio, e.g. "my-gateway --config gw.yaml"')
+    ap.add_argument("--self", dest="self_test", action="store_true", help="black-box: run the scenarios against Aggrete itself")
+    ap.add_argument("--write-fixture", metavar="DIR", help="write the reference fixture config and policy, then exit")
     ns = ap.parse_args(argv[1:])
+    if ns.write_fixture:
+        from . import blackbox
+        root = blackbox.write_fixture(ns.write_fixture)
+        print(f"wrote {root}/proxy.config.yaml and {root}/coc.yaml\n"
+              f"fixture upstream for any gateway: python -m aggrete._mockco --profile fixture")
+        return 0
+    if ns.url or ns.stdio or ns.self_test:
+        from . import blackbox
+        rep = blackbox.run(url=ns.url, token=ns.token, stdio=ns.stdio, self_test=ns.self_test)
+        text = {"text": blackbox.render_text, "json": lambda r: json.dumps(r, indent=2), "md": blackbox.render_md}[ns.format](rep)
+        if ns.out:
+            Path(ns.out).write_text(text); print(f"wrote {ns.out}")
+        else:
+            print(text, end="")
+        return 1 if any(s["status"] == "fail" for s in rep["scenarios"]) else 0
     rep = run()
     text = {"text": render_text, "json": lambda r: json.dumps(r, indent=2), "md": render_md}[ns.format](rep)
     if ns.out:

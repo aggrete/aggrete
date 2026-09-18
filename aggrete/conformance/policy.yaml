@@ -71,7 +71,7 @@ rules:
     owner: data-gov@example.com
     severity: high
     enforce:
-      - {layer: retrieval, action: deny, type: arg_match, tools: ["crm__export*"], deny_when: [{arg: scope, in: [all, company]}]}
+      - {layer: retrieval, action: deny, type: arg_match, tools: ["crm__export*", "*crm_export*"], deny_when: [{arg: scope, in: [all, company]}]}
     tests:
       - {name: team_ok, expect: allow, tool: crm__export, args: {scope: team}}
       - {name: all_denied, expect: deny, tool: crm__export, args: {scope: all}}

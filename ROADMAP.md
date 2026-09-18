@@ -235,25 +235,34 @@ These already work in the open-source proxy today.
   `requestState` forwarded byte-exact, the Tasks extension stripped from
   forwarded capabilities, `cacheScope: private`, `audit_forward: {http: {format: ocsf}}`.
 
-## Next (in progress)
+- **Native inside agentgateway** *(shipped in 0.11)*.
+  agentgateway asks Aggrete before and after every MCP call over its own
+  ExtMCP protocol, so refusals, holds, redaction and hidden tools happen inside
+  the gateway you already run.
+  *For example:* `aggrete extmcp --port 9001`, one `mcpGuardrails` processor in
+  the gateway config, and the third of three combining reads comes back
+  `PERMISSION_DENIED` with the rule id.
+  *Under the hood:* a gRPC server for `CheckRequest`/`CheckResponse` on the
+  vendored `ext_mcp.proto`, identity from CEL metadata, `tools/list` filtering,
+  `mutated` params and results; optional extra `aggrete[agentgateway]`.
 
-- **agentgateway ExtMCP adapter.**
-  agentgateway's MCP-native hook sees both phases, filters `tools/list`, and
-  carries identity in metadata, which makes it the best home for the engine.
-  It is gRPC on a published proto.
-  *Under the hood:* an ExtMCP gRPC server (`CheckRequest` / `CheckResponse`)
-  wrapping the same decider as `/v1/decide`; optional extra `aggrete[agentgateway]`.
+- **Score any gateway with the same report** *(shipped in 0.11)*.
+  The conformance scenarios also run from the outside, over real MCP, against
+  any endpoint that fronts the bundled fixture connector.
+  *For example:* `aggrete conformance --url https://gateway.example/mcp` prints
+  whether the combination formed, the exfiltration write went out, the SSN
+  arrived, or the poisoned tool ran. With nothing in front of the fixture,
+  every scenario fails, which is the point.
+  *Under the hood:* marker-based scenarios (no parsing of refusal text), control
+  steps that turn "blocks everything" into "inconclusive", `--self`,
+  `--write-fixture`, framework mapping with "not observable" where the outside
+  cannot see.
+
+## Next (in progress)
 
 - **Tasks extension routing.**
   Long-running tool calls under the MCP Tasks extension are stripped from
   forwarded capabilities today; routing `tasks/*` through policy is next.
-
-- **Conformance you can point at any gateway.**
-  Today's checks run in-process. The black-box form drives an MCP endpoint
-  through the same scenarios with the bundled mock connectors, so a team can
-  score agentgateway, Docker's gateway, or ContextForge with the same report.
-  *Under the hood:* `aggrete conformance --url https://.../mcp`, scenario
-  fixtures shared with `aggrete --demo`.
 
 - **Retention and archive of the audit trail.**
   Decisions already stream to a SIEM or an OpenTelemetry collector (below). What

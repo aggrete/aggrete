@@ -34,6 +34,40 @@ The latest generated report is committed at
 [conformance-report.md](conformance-report.md). Regenerate it with
 `aggrete conformance --format md --out docs/conformance-report.md`.
 
-What this is not: a black-box suite you can point at another gateway. That is
-the next step (drive any MCP endpoint through the same scenarios with the mock
-connectors), and it is on the roadmap.
+## Black-box: score any gateway
+
+The same scenarios run from the outside, over real MCP, against any endpoint.
+Nothing in the suite knows how a gateway words a refusal: every fixture payload
+carries a unique marker, and a scenario passes when the forbidden marker never
+reaches the client.
+
+```bash
+# 1. front this fixture connector with the gateway under test (stdio MCP server)
+python -m aggrete._mockco --profile fixture
+
+# 2. run the scenarios against the gateway
+aggrete conformance --url https://gateway.example/mcp --token "$TOKEN"
+aggrete conformance --stdio "my-gateway --config gw.yaml"
+
+aggrete conformance --self                 # Aggrete itself, as the reference
+aggrete conformance --write-fixture ./fx   # the reference config and policy
+```
+
+| Scenario | What it tests |
+|---|---|
+| B01 | Budget, personnel and rota about the same people: the third read must not arrive |
+| B02 | A write is allowed before an untrusted read and refused after it |
+| B03 | An export is allowed for `scope=team` and refused for `scope=all` |
+| B04 | An SSN in a result never reaches the client |
+| B05 | A credential in the arguments never reaches the upstream |
+| B06 | A tool with hidden instructions in its description is not usable |
+| B07 | A tool this person may never call is hidden or refused |
+| B08 | Refusals carry a readable reason, not a bare error |
+
+Controls run in one session as one identity, in a fixed order, because several
+are about memory across calls. Each has a control step so a target that simply
+blocks everything scores "inconclusive", not "pass". The report maps scenarios
+onto the same four frameworks; controls that cannot be seen from outside (audit
+integrity, identity handling, approvals) are marked "not observable" rather
+than guessed. The bare fixture with nothing in front of it fails B01 to B07,
+which is the suite's own sanity check.

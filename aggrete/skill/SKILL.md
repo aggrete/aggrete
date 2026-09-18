@@ -210,14 +210,17 @@ Aggrete with `upstreams: {}` and `adapters: {token: ...}` and let the gateway
 call `POST /v1/decide` (request and response phases), `POST
 /access/v1/evaluation` (OpenID AuthZEN), or the Docker `before`/`after`
 interceptor endpoints; for ContextForge, `python -m aggrete.adapters` is an
-external plugin. Same rules, memory, redaction and audit, no second hop.
+external plugin; for agentgateway, `aggrete extmcp --port 9001` serves its
+native ExtMCP hook over gRPC (`pip install "aggrete[agentgateway]"`). Same rules, memory, redaction and audit, no second hop.
 
 ## Conformance
 
 `aggrete conformance` runs sixteen checks against the real components and maps
 them onto the OWASP MCP Top 10, OWASP Agentic Top 10, CoSAI MCP threats and
 AIUC-1 controls. `--format md` is what an auditor gets; `--format json` exits
-non-zero on any failure, for CI.
+non-zero on any failure, for CI. `--url` or `--stdio` runs the same scenarios
+black-box against any gateway that fronts `python -m aggrete._mockco --profile
+fixture`; `--self` runs them against Aggrete as the reference.
 
 ## Honest limits
 

@@ -30,7 +30,8 @@ dependencies = [
 [project.optional-dependencies]
 redis = ["redis>=5"]
 ingest = ["anthropic>=1.0"]
-dev = ["pytest", "redis>=5", "anthropic>=1.0"]
+agentgateway = ["grpcio>=1.84", "protobuf>=7.35.1"]
+dev = ["pytest", "redis>=5", "anthropic>=1.0", "grpcio>=1.84", "protobuf>=7.35.1"]
 
 [project.scripts]
 aggrete = "aggrete.proxy:cli"
@@ -50,3 +51,4 @@ include = ["aggrete*"]
 "aggrete" = ["_demo/*.yaml"]
 "aggrete.skill" = ["*.md", "references/*.md"]
 "aggrete.conformance" = ["*.yaml"]
+"aggrete.extmcp" = ["*.proto"]

@@ -49,8 +49,8 @@ Each call is fine alone. The third completes a forbidden set across three domain
 - **[Writing policy](docs/POLICY.md)** — the `coc.yaml` schema, rule types, `arg_match`, and drafting from your handbook with `aggrete-ingest`
 - **[Deploying](docs/DEPLOY.md)** — architecture, the deploy matrix, HTTP + OAuth, connecting Claude, and per-user credentials
 - **[Building a connector](docs/CONNECTORS.md)** — expose read/write tools and govern any system (Google Drive is the reference)
-- **[Adapter mode](docs/ADAPTERS.md)** — run the engine inside agentgateway, Docker MCP Gateway, IBM ContextForge or any AuthZEN-speaking gateway via `/v1/decide`, `/access/v1/evaluation`, Docker interceptors, or the ContextForge plugin
-- **[Conformance](docs/CONFORMANCE.md)** — `aggrete conformance` runs sixteen checks against the real components and maps them onto the OWASP MCP Top 10, OWASP Agentic Top 10, CoSAI and AIUC-1 ([latest report](docs/conformance-report.md))
+- **[Adapter mode](docs/ADAPTERS.md)** — run the engine inside agentgateway (native ExtMCP over gRPC, `aggrete extmcp`), Docker MCP Gateway, IBM ContextForge or any AuthZEN-speaking gateway
+- **[Conformance](docs/CONFORMANCE.md)** — `aggrete conformance` runs sixteen checks against the real components and maps them onto the OWASP MCP Top 10, OWASP Agentic Top 10, CoSAI and AIUC-1; `--url` runs the same scenarios black-box against any gateway ([latest report](docs/conformance-report.md))
 - **[Roadmap](ROADMAP.md)** — shipped, in progress, and planned
 - **[Agent skill](skills/aggrete/SKILL.md)** — teach Claude Code or any MCP client to set up and operate Aggrete: `/plugin marketplace add aggrete/aggrete`, or read `skill://aggrete/SKILL.md` from a running proxy
 

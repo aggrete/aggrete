@@ -116,11 +116,42 @@ the rule id; a redaction returns `modified_payload`.
 
 ## agentgateway
 
-Not yet. agentgateway's ExtMCP hook is the best fit of all of these (request
-and response phases, `tools/list` filtering, identity via CEL metadata), but
-it is gRPC on a published proto. The adapter is on the roadmap; until then use
-agentgateway's `extAuthz` with `includeRequestBody` pointed at
-`/access/v1/evaluation` for allow/deny.
+agentgateway's ExtMCP hook is the best fit of all of these: it is MCP-native,
+runs in both phases, filters `tools/list`, and can rewrite params and results.
+Aggrete serves it over gRPC.
+
+```bash
+pip install "aggrete[agentgateway]"
+aggrete extmcp --config proxy.config.yaml --port 9001
+```
+
+```yaml
+# agentgateway (standalone)
+policies:
+  mcpGuardrails:
+    processors:
+      - kind: remote
+        host: localhost:9001
+        failureMode: failClosed
+        metadata: {user: jwt.email, tool: mcp.tool.name}
+        methods: {"tools/call": full, "tools/list": response}
+```
+
+- **`metadata.user`** is who the policy is evaluated for. Without it every call
+  is refused, because there is no one to keep memory about. Use `jwt.sub` if
+  your tokens carry no email, and `--user-key` if you name the key differently.
+- **`metadata.tool`** tells the response phase which tool produced a result;
+  the ExtMCP response message does not carry the request. If it is missing the
+  adapter falls back to the last tool that person called on that backend.
+- Tool names are qualified as `<backend>__<tool>` from `service_names`, which
+  is the form the policy's `domains:` map expects.
+- A refusal or a hold returns `PERMISSION_DENIED` with the rule and reason; a
+  rate limit returns `RESOURCE_EXHAUSTED`; masked arguments and redacted
+  results return `mutated`; walled and poisoned tools are removed from
+  `tools/list`.
+
+`ext_mcp.proto` and the generated stubs are vendored from agentgateway
+(Apache-2.0) under `aggrete/extmcp/`.
 
 ## What the gateway still has to do
 
