@@ -199,6 +199,10 @@ To explain a refusal, find the `pre` or `post` row for that tool and user,
 read `rule`, then open that `rule_id` in `coc.yaml` for the clause and
 remediation. The Aggrete Console reads only `audit.jsonl` and `coc.yaml`.
 
+Over HTTP, `/metrics` exposes the same decisions as Prometheus counters,
+`/readyz` tells you whether every upstream is connected, and `audit_forward:
+{otlp: ...}` streams rows to an OpenTelemetry collector.
+
 ## Honest limits
 
 - A post-call denial redacts, it does not un-fetch. Prefer pre-call rules.

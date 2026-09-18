@@ -195,13 +195,24 @@ These already work in the open-source proxy today.
   /approvals` over HTTP, Slack webhook or command notifier. The "human-in-the-loop
   gate at the proxy" ask ([HN](https://news.ycombinator.com/item?id=43676771)).
 
+- **Graphs and health checks that match the record** *(shipped in 0.10)*.
+  The proxy reports how many calls it allowed, refused, held, and redacted, per
+  rule and per system, in the format monitoring tools already read, and tells
+  the platform whether it is ready to serve.
+  *For example:* a dashboard panel shows refusals under COC-HR-004 climbing on a
+  Tuesday afternoon; Kubernetes holds traffic until every connector is connected.
+  *Under the hood:* Prometheus `/metrics` derived from the same audit rows,
+  `/healthz` and `/readyz`, an OTLP/HTTP log exporter for any OpenTelemetry
+  collector (no SDK), and Helm probes on the new endpoints.
+
 ## Next (in progress)
 
-- **Native OpenTelemetry, with retention and archive.**
-  Basic SIEM streaming already ships (`audit_forward:`, above). What remains is
-  first-class OpenTelemetry (GenAI/MCP semantic conventions) and managed retention
-  and archive of the audit trail, rather than a webhook or syslog line.
-  *Under the hood:* OTLP spans on the MCP semconv, plus retention/archive policy
+- **Retention and archive of the audit trail.**
+  Decisions already stream to a SIEM or an OpenTelemetry collector (below). What
+  remains is managed retention: rotate, archive, and prove the chain across
+  archived segments, so a year of decisions is as verifiable as today's file.
+  *Under the hood:* segment rotation with chain continuity, OTLP *spans* on the
+  MCP semantic conventions in addition to the log records that ship now
   ([agentic-community#413](https://github.com/agentic-community/mcp-gateway-registry/issues/413)).
 
 ## Planned

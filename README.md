@@ -40,7 +40,7 @@ Each call is fine alone. The third completes a forbidden set across three domain
 - **Redacts** emails, SSNs, cards, and tokens from results before they reach the model; **hides** walled tools from users who can't call them.
 - **Shields against prompt injection** — any write after a session reads untrusted content is refused — and against **tool poisoning**, flagging hidden instructions in tool descriptions.
 - **Holds upstream credentials itself** (confused-deputy safe), with optional per-user on-behalf-of access.
-- **Audits tamper-evidently** — every decision is one hash-chained JSON line (`aggrete-audit`), optionally forwarded to a SIEM.
+- **Audits tamper-evidently** — every decision is one hash-chained JSON line (`aggrete-audit`), forwarded to a SIEM or an OpenTelemetry collector, with Prometheus metrics and health endpoints for operations.
 - **Ask before you act** — `check` previews any sequence, `scenarios` lists things to try.
 - **Hold for a human** — `action: approve` pauses a call until the clause owner approves it, from Slack, the terminal, or the console; the approval is a time-limited, audited grant.
 

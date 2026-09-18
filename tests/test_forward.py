@@ -55,3 +55,17 @@ def test_audit_emits_to_forwarder():
     a.emit(user="u", tool="t", decision="allow")
     a.forward.flush()
     assert len(got) == 1 and got[0]["tool"] == "t" and "hash" in got[0]
+
+
+def test_build_otlp_and_record_shape(monkeypatch):
+    captured: dict = {}
+    monkeypatch.setenv("OTLP", "http://collector:4318/v1/logs")
+    monkeypatch.setattr(forward, "_otlp_sink",
+                        lambda endpoint, headers, service_name="aggrete": captured.update(endpoint=endpoint, headers=headers, svc=service_name) or (lambda r: None))
+    assert build_forwarder({"otlp": {"endpoint": "${OTLP}", "headers": {"x-api-key": "k"}}}) is not None
+    assert captured == {"endpoint": "http://collector:4318/v1/logs", "headers": {"x-api-key": "k"}, "svc": "aggrete"}
+    rec = forward.otlp_log_record({"ts": 1.5, "user": "u@x", "decision": "deny", "rule": "COC-HR-004", "write": False, "entities": 3})
+    assert rec["timeUnixNano"] == "1500000000" and rec["severityText"] == "WARN"
+    attrs = {a["key"]: a["value"] for a in rec["attributes"]}
+    assert attrs["aggrete.user"] == {"stringValue": "u@x"} and attrs["aggrete.write"] == {"boolValue": False}
+    assert attrs["aggrete.entities"] == {"intValue": "3"} and attrs["event.name"] == {"stringValue": "aggrete.decision"}

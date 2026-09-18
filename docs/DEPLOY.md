@@ -55,6 +55,27 @@ upstreams:
       command: [/opt/aggrete/obo.sh]   # prints {"env": {...}, "headers": {...}} per (user, upstream)
 ```
 
+## Observability
+
+Over HTTP the proxy serves three unauthenticated operational endpoints:
+
+| Path | What |
+|---|---|
+| `/healthz` | liveness: `{"ok": true, "version": ...}` |
+| `/readyz` | readiness: 200 when every configured upstream is connected, else 503 with the missing names |
+| `/metrics` | Prometheus text: `aggrete_decisions_total{stage,decision,domain}`, `aggrete_rule_hits_total{rule,decision}`, `aggrete_alerts_total{rule}`, `aggrete_redactions_total{kind}`, `aggrete_upstream_seconds` histogram, `aggrete_build_info` |
+
+Counters are derived from the same rows written to `audit.jsonl`, so the graphs and the record agree. Gate `/metrics` with `metrics: {token: "${METRICS_TOKEN}"}` (scrape with `Authorization: Bearer`), or turn it off with `metrics: {enabled: false}`. The Helm chart probes `/readyz` and `/healthz`; uncomment the `prometheus.io/*` pod annotations in `values.yaml` to be scraped.
+
+Audit rows also stream to any OpenTelemetry collector as OTLP/HTTP JSON log records (no SDK, best-effort, off the hot path), next to the Splunk/Datadog HTTP and syslog forwarders:
+
+```yaml
+audit_forward:
+  otlp: {endpoint: "http://otel-collector:4318/v1/logs", headers: {x-api-key: "${OTEL_KEY}"}}
+```
+
+Each record carries the row as its body and every field as an `aggrete.*` attribute, with `event.name=aggrete.decision` and severity WARN for `deny` and `hold`.
+
 ## The Console
 
 `audit.jsonl` and `coc.yaml` are the only two files the Aggrete Console reads — it never touches the connectors and changes nothing the proxy enforces. Put it behind your SSO (or at minimum HTTP basic auth); it shows who asked what. Keep it on the same host or a shared volume as the proxy.

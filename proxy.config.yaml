@@ -43,6 +43,14 @@ audit_log: audit.jsonl
 #     headers: {Authorization: "Splunk ${HEC_TOKEN}"}
 #   # or, instead of http:
 #   # syslog: {host: siem.internal, port: 514, proto: udp}
+#   # or any OpenTelemetry collector (OTLP/HTTP JSON logs):
+#   # otlp: {endpoint: "http://otel-collector:4318/v1/logs", headers: {x-api-key: "${OTEL_KEY}"}}
+
+# Operations (HTTP mode): /healthz, /readyz and Prometheus /metrics are served
+# unauthenticated by default. Require a bearer token on /metrics, or turn it off.
+# metrics:
+#   token: "${METRICS_TOKEN}"
+#   enabled: true
 
 # What assistants show for this connector (name and logo in the connect dialog).
 # Advertised in the MCP handshake so a client (or the Glama inspector) can show a

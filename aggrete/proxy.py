@@ -413,7 +413,9 @@ class Proxy:
             async with self._upstream_session(self.user, upstream) as session:
                 if session is None:
                     return self._refuse(f"Unknown upstream {upstream!r}.")
+                t0 = time.monotonic()
                 result = await session.call_tool(tool, args)
+                upstream_ms = round((time.monotonic() - t0) * 1000, 1)
         except Exception as e:
             self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
                             decision="deny", rule="obo-credential", evidence={"error": str(e)[:200]})
@@ -432,7 +434,7 @@ class Proxy:
                         entities=len(ents), decision="deny" if not post.allow else "allow",
                         entity_ids=(ents if self.cfg.get("audit_entities", True) else None),
                         rule=post.rule_id, alerts=post.alerts, evidence=post.evidence,
-                        redacted=(redacted or None), purpose=pre.granted_purpose)
+                        redacted=(redacted or None), purpose=pre.granted_purpose, upstream_ms=upstream_ms)
 
         if not post.allow:
             # The data left the upstream, but it does not reach the model.
@@ -726,6 +728,8 @@ def build_http_app(server: Server, cfg: dict, connect, proxy_ref: "Proxy | None"
     routes.append(Route("/mcp", endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]))
     if proxy_ref is not None and not anonymous:
         routes += approval_routes(proxy_ref, auth_cfg)
+    if proxy_ref is not None:
+        routes += ops_routes(proxy_ref, cfg)
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -739,6 +743,38 @@ def build_http_app(server: Server, cfg: dict, connect, proxy_ref: "Proxy | None"
         Middleware(AuthContextMiddleware),
     ]
     return Starlette(routes=routes, lifespan=lifespan, middleware=mw)
+
+
+def ops_routes(proxy: "Proxy", cfg: dict) -> list:
+    """GET /healthz (liveness), GET /readyz (every configured upstream connected),
+    GET /metrics (Prometheus text). Metrics can be gated with `metrics: {token: ...}`."""
+    from starlette.responses import JSONResponse, PlainTextResponse
+    from starlette.routing import Route
+    mcfg = cfg.get("metrics") or {}
+    token = os.path.expandvars(str(mcfg.get("token"))) if mcfg.get("token") else None
+
+    async def healthz(request):
+        return JSONResponse({"ok": True, "version": proxy.audit.metrics.version if proxy.audit.metrics else None})
+
+    async def readyz(request):
+        want = list((cfg.get("upstreams") or {}).keys())
+        have = [u for u in want if u in proxy.sessions]
+        missing = [u for u in want if u not in proxy.sessions]
+        body = {"ready": not missing, "upstreams": {"connected": have, "missing": missing}}
+        return JSONResponse(body, status_code=200 if not missing else 503)
+
+    async def metrics(request):
+        if mcfg.get("enabled") is False:
+            return PlainTextResponse("metrics disabled\n", status_code=404)
+        if token:
+            auth = request.headers.get("authorization", "")
+            if auth != f"Bearer {token}":
+                return PlainTextResponse("unauthorized\n", status_code=401)
+        m = proxy.audit.metrics
+        text = m.render() if m else "# no metrics registry\n"
+        return PlainTextResponse(text, media_type="text/plain; version=0.0.4; charset=utf-8")
+
+    return [Route("/healthz", healthz), Route("/readyz", readyz), Route("/metrics", metrics)]
 
 
 def approval_routes(proxy: "Proxy", auth_cfg: dict) -> list:
@@ -842,7 +878,13 @@ async def main() -> None:
     engine = Engine(str(root / cfg.get("coc", "coc.yaml")), build_store(cfg.get("store")),
                     pack_state_path=cfg.get("pack_state"))
     from .forward import build_forwarder
-    audit = Audit(cfg.get("audit_log"), forward=build_forwarder(cfg.get("audit_forward")))
+    from .metrics import Metrics
+    try:
+        from importlib.metadata import version as _pv
+        _mver = _pv("aggrete")
+    except Exception:
+        _mver = "0"
+    audit = Audit(cfg.get("audit_log"), forward=build_forwarder(cfg.get("audit_forward")), metrics=Metrics(_mver))
     proxy = Proxy(cfg, engine, audit)
 
     brand = cfg.get("brand", {})

@@ -48,11 +48,12 @@ class Audit:
     JSON line. Prompts tell you what was asked; this tells you what was handed
     over, and proves the record has not been altered."""
 
-    def __init__(self, path: str | None, forward=None):
+    def __init__(self, path: str | None, forward=None, metrics=None):
         self.path = path
         self.fh = open(path, "a") if path else None
         self.prev = _last_hash(path) if path else GENESIS
         self.forward = forward   # optional Forwarder: ships each row to a SIEM
+        self.metrics = metrics   # optional Metrics: Prometheus counters from the same rows
 
     def emit(self, **row):
         row["ts"] = time.time()
@@ -66,6 +67,11 @@ class Audit:
             self.fh.flush()
         if self.forward:
             self.forward.send(row)
+        if self.metrics:
+            try:
+                self.metrics.observe(row)
+            except Exception:
+                pass
 
 
 def verify_chain(path: str) -> tuple[bool, int | None, int]:

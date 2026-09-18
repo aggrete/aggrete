@@ -49,3 +49,9 @@ resources:
   requests: {cpu: 100m, memory: 128Mi}
   limits: {cpu: "1", memory: 512Mi}
 podAnnotations: {}
+# Prometheus: the proxy serves /metrics (text format). Uncomment to be scraped,
+# and set `config.metrics.token` (with an env ref) to require a bearer token.
+# podAnnotations:
+#   prometheus.io/scrape: "true"
+#   prometheus.io/path: /metrics
+#   prometheus.io/port: "8080"

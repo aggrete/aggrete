@@ -12,6 +12,9 @@ breaks a tool call. Dependency-free (stdlib urllib / socket).
     # or
     audit_forward:
       syslog: {host: siem.internal, port: 514, proto: udp}
+    # or any OpenTelemetry collector (OTLP/HTTP JSON logs)
+    audit_forward:
+      otlp: {endpoint: "http://otel-collector:4318/v1/logs"}
 """
 
 from __future__ import annotations
@@ -93,6 +96,48 @@ def _syslog_sink(host: str, port: int, proto: str):
     return sink
 
 
+def _otlp_attr(k: str, v):
+    if isinstance(v, bool):
+        return {"key": k, "value": {"boolValue": v}}
+    if isinstance(v, int):
+        return {"key": k, "value": {"intValue": str(v)}}
+    if isinstance(v, float):
+        return {"key": k, "value": {"doubleValue": v}}
+    return {"key": k, "value": {"stringValue": v if isinstance(v, str) else json.dumps(v, default=str)}}
+
+
+def otlp_log_record(row: dict) -> dict:
+    """One audit row as an OTLP/HTTP JSON LogRecord: the row is the body, and
+    every top-level field is also an attribute (`aggrete.<field>`) so collectors
+    can filter without parsing the body."""
+    decision = str(row.get("decision") or "")
+    sev = "WARN" if decision in ("deny", "hold") else "INFO"
+    attrs = [_otlp_attr(f"aggrete.{k}", v) for k, v in row.items() if k not in ("ts", "prev")]
+    attrs.append(_otlp_attr("event.name", "aggrete.decision"))
+    return {
+        "timeUnixNano": str(int(float(row.get("ts") or 0) * 1e9)),
+        "severityText": sev,
+        "severityNumber": 13 if sev == "WARN" else 9,
+        "body": {"stringValue": json.dumps(row, default=str)},
+        "attributes": attrs,
+    }
+
+
+def _otlp_sink(endpoint: str, headers: dict, service_name: str = "aggrete"):
+    """OTLP/HTTP JSON logs (`/v1/logs`) to any OpenTelemetry collector. No SDK."""
+    def sink(row: dict) -> None:
+        payload = {"resourceLogs": [{
+            "resource": {"attributes": [_otlp_attr("service.name", service_name)]},
+            "scopeLogs": [{"scope": {"name": "aggrete"}, "logRecords": [otlp_log_record(row)]}],
+        }]}
+        req = urllib.request.Request(
+            endpoint, data=json.dumps(payload).encode(), method="POST",
+            headers={"Content-Type": "application/json", **headers})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            resp.read()
+    return sink
+
+
 def build_forwarder(cfg: dict | None) -> Forwarder | None:
     """Build a forwarder from an `audit_forward:` block, or None when unset.
     URL and header values may reference ${ENV} so tokens stay out of the config."""
@@ -103,6 +148,11 @@ def build_forwarder(cfg: dict | None) -> Forwarder | None:
         url = os.path.expandvars(h["url"])
         headers = {k: os.path.expandvars(str(v)) for k, v in (h.get("headers") or {}).items()}
         return Forwarder(_http_sink(url, headers), "http")
+    if cfg.get("otlp"):
+        o = cfg["otlp"]
+        endpoint = os.path.expandvars(o.get("endpoint") or o.get("url") or "http://localhost:4318/v1/logs")
+        headers = {k: os.path.expandvars(str(v)) for k, v in (o.get("headers") or {}).items()}
+        return Forwarder(_otlp_sink(endpoint, headers, o.get("service_name", "aggrete")), "otlp")
     if cfg.get("syslog"):
         s = cfg["syslog"]
         return Forwarder(_syslog_sink(os.path.expandvars(str(s["host"])),

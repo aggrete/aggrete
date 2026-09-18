@@ -153,8 +153,25 @@ audit_forward:
   # syslog: {host: siem.internal, port: 514, proto: udp}
 ```
 
+```yaml
+audit_forward:
+  otlp: {endpoint: "http://otel-collector:4318/v1/logs"}   # any OpenTelemetry collector, no SDK
+```
+
 Best effort, off the hot path. The local hash-chained file stays the system of
 record. Verify it with `aggrete-audit audit.jsonl`.
+
+## Operations (HTTP mode)
+
+`/healthz` (liveness), `/readyz` (503 until every upstream is connected), and
+Prometheus `/metrics` (decisions, rule hits, alerts, redactions, upstream
+latency histogram) are served without auth by default.
+
+```yaml
+metrics:
+  token: "${METRICS_TOKEN}"   # require Authorization: Bearer on /metrics
+  enabled: true
+```
 
 ## What clients see
 
