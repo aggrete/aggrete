@@ -205,7 +205,24 @@ These already work in the open-source proxy today.
   `/healthz` and `/readyz`, an OTLP/HTTP log exporter for any OpenTelemetry
   collector (no SDK), and Helm probes on the new endpoints.
 
+- **Proof you can hand to an auditor** *(shipped in 0.10)*.
+  One command runs sixteen checks against the real proxy and prints which
+  controls in the lists people ask about (OWASP MCP Top 10, OWASP Agentic Top 10,
+  CoSAI, AIUC-1) it demonstrates, with the evidence line for each.
+  *For example:* `aggrete conformance --format md` produces the report an
+  auditor attaches to the file, and CI fails if any check stops holding.
+  *Under the hood:* `aggrete/conformance/` with a one-rule-per-mechanism policy,
+  a canned upstream, and a framework mapping; the report is committed at
+  `docs/conformance-report.md`.
+
 ## Next (in progress)
+
+- **Conformance you can point at any gateway.**
+  Today's checks run in-process. The black-box form drives an MCP endpoint
+  through the same scenarios with the bundled mock connectors, so a team can
+  score agentgateway, Docker's gateway, or ContextForge with the same report.
+  *Under the hood:* `aggrete conformance --url https://.../mcp`, scenario
+  fixtures shared with `aggrete --demo`.
 
 - **Retention and archive of the audit trail.**
   Decisions already stream to a SIEM or an OpenTelemetry collector (below). What

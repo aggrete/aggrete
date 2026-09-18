@@ -1,0 +1,71 @@
+# Which check demonstrates which control. A control with no checks is reported
+# with its note (not applicable to a proxy, or a deployment-level property).
+frameworks:
+  - id: owasp-mcp-top10
+    name: OWASP MCP Top 10 (2025, beta)
+    url: https://owasp.org/www-project-mcp-top-10/
+    controls:
+      - {id: MCP01, title: Token Mismanagement & Secret Exposure, checks: [C06, C05, C10], note: "the proxy holds upstream credentials; callers' tokens are never forwarded (C10)"}
+      - {id: MCP02, title: Privilege Escalation via Scope Creep, checks: [C01, C12, C04]}
+      - {id: MCP03, title: Tool Poisoning, checks: [C07]}
+      - {id: MCP04, title: Software Supply Chain Attacks & Dependency Tampering, checks: [C07], partial: true, note: "rug-pull detection by fingerprint; package-level supply chain is out of scope"}
+      - {id: MCP05, title: Command Injection & Execution, checks: [C04, C06], partial: true, note: "argument-level rules and secret blocking constrain what reaches a server; injection inside the server is the server's job"}
+      - {id: MCP06, title: Prompt Injection via Contextual Payloads, checks: [C03, C07]}
+      - {id: MCP07, title: Insufficient Authentication & Authorization, checks: [C10, C01, C12]}
+      - {id: MCP08, title: Lack of Audit and Telemetry, checks: [C09, C16]}
+      - {id: MCP09, title: Shadow MCP Servers, checks: [], note: "deployment property: make the proxy the only allowed server (docs/DEPLOY.md, managed client allow-lists)"}
+      - {id: MCP10, title: Context Injection & Over-Sharing, checks: [C02, C13, C05]}
+  - id: owasp-agentic-top10
+    name: OWASP Top 10 for Agentic Applications (2026)
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+    controls:
+      - {id: ASI01, title: Agent Goal Hijack, checks: [C03, C07]}
+      - {id: ASI02, title: Tool Misuse & Exploitation, checks: [C04, C08, C15]}
+      - {id: ASI03, title: Identity & Privilege Abuse, checks: [C10, C01, C12]}
+      - {id: ASI04, title: Agentic Supply Chain Vulnerabilities, checks: [C07], partial: true}
+      - {id: ASI05, title: Unexpected Code Execution, checks: [], note: "not a proxy concern; see MCP05"}
+      - {id: ASI06, title: Memory & Context Poisoning, checks: [C03, C05]}
+      - {id: ASI07, title: Insecure Inter-Agent Communication, checks: [], note: "A2A is out of scope for an MCP proxy"}
+      - {id: ASI08, title: Cascading Failures, checks: [C08, C16], partial: true}
+      - {id: ASI09, title: Human-Agent Trust Exploitation, checks: [C11, C15]}
+      - {id: ASI10, title: Rogue Agents, checks: [C02, C13, C08]}
+  - id: cosai-mcp
+    name: CoSAI MCP Security v2.0 (Aug 2026) threats
+    url: https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/blob/main/whitepapers/model-context-protocol-security.md
+    controls:
+      - {id: T2, title: Tool Poisoning, checks: [C07]}
+      - {id: T3, title: Full Schema Poisoning, checks: [C07]}
+      - {id: T4, title: Resource Content Poisoning, checks: [C03]}
+      - {id: T8, title: Confused Deputy (OAuth proxy), checks: [C10]}
+      - {id: T9, title: Insecure Human-in-the-Loop, checks: [C11]}
+      - {id: T11, title: Prompt Injection, checks: [C03]}
+      - {id: T13, title: Consent / User-Approval Fatigue, checks: [C11, C15], partial: true, note: "approvals are per rule with a TTL, not per call"}
+      - {id: T14, title: Resource Exhaustion & Denial of Wallet, checks: [C08]}
+      - {id: T15, title: Invisible Agent Activity, checks: [C09, C16]}
+      - {id: T16, title: Credential / Token Theft, checks: [C06, C10]}
+      - {id: T20, title: Excessive Permissions / Overexposure, checks: [C01, C12, C13]}
+      - {id: T23, title: Insufficient Integrity Checks, checks: [C07, C09]}
+      - {id: T24, title: Data Exfiltration & Corruption, checks: [C03, C02, C05]}
+      - {id: T34, title: Lack of Observability, checks: [C16, C09]}
+  - id: aiuc-1
+    name: AIUC-1 (live IDs, Sept 2026)
+    url: https://standard.aiuc-1.com/
+    controls:
+      - {id: A003.1, title: Data access scoping, checks: [C01, C02, C13]}
+      - {id: A003.2, title: Agent identity management, checks: [C10]}
+      - {id: A003.3, title: Agent access & permissions management, checks: [C11, C12], partial: true, note: "time-limited approvals; per-tool OAuth scopes are on the roadmap"}
+      - {id: A008.1, title: Secrets detection in user inputs, checks: [C06]}
+      - {id: A008.5, title: Secrets redaction in logs & artifacts, checks: [C05]}
+      - {id: B006.1, title: Agent service access restrictions, checks: [C07, C12]}
+      - {id: B006.2, title: Agent security monitoring & alerting, checks: [C09, C16]}
+      - {id: B006.3, title: Execution-level safeguards, checks: [C07, C01], partial: true}
+      - {id: B008.1, title: API & agentic interface authentication, checks: [C10]}
+      - {id: B008.3, title: Agentic interface data integrity, checks: [C07, C06]}
+      - {id: C007, title: Flag high risk outputs for human review, checks: [C11]}
+      - {id: D003.1, title: Tool authorization & validation, checks: [C01, C04]}
+      - {id: D003.2, title: Rate limits for tools, checks: [C08]}
+      - {id: D003.3, title: Tool call log, checks: [C09]}
+      - {id: D003.4, title: Human-approval workflows, checks: [C11]}
+      - {id: E009.1, title: Third-party access monitoring, checks: [C09, C16]}
+      - {id: E015.2, title: AI agent logging implementation, checks: [C09]}
+      - {id: E015.4, title: Log integrity protection, checks: [C09]}

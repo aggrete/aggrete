@@ -203,6 +203,13 @@ Over HTTP, `/metrics` exposes the same decisions as Prometheus counters,
 `/readyz` tells you whether every upstream is connected, and `audit_forward:
 {otlp: ...}` streams rows to an OpenTelemetry collector.
 
+## Conformance
+
+`aggrete conformance` runs sixteen checks against the real components and maps
+them onto the OWASP MCP Top 10, OWASP Agentic Top 10, CoSAI MCP threats and
+AIUC-1 controls. `--format md` is what an auditor gets; `--format json` exits
+non-zero on any failure, for CI.
+
 ## Honest limits
 
 - A post-call denial redacts, it does not un-fetch. Prefer pre-call rules.

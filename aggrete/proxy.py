@@ -639,6 +639,12 @@ def build_store(store_cfg: dict | None):
 
 
 def cli() -> None:
+    # Subcommands that are not the server: run synchronously, outside the loop.
+    if len(sys.argv) > 1 and sys.argv[1] in ("approvals", "approve", "deny"):
+        raise SystemExit(approvals_mod.cli(sys.argv[1:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "conformance":
+        from . import conformance
+        raise SystemExit(conformance.cli(sys.argv[1:]))
     asyncio.run(main())
 
 
@@ -831,8 +837,6 @@ def approval_routes(proxy: "Proxy", auth_cfg: dict) -> list:
 
 
 async def main() -> None:
-    if len(sys.argv) > 1 and sys.argv[1] in ("approvals", "approve", "deny"):
-        raise SystemExit(approvals_mod.cli(sys.argv[1:]))
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="proxy.config.yaml")
     ap.add_argument("--transport", choices=["stdio", "streamable-http"], default="stdio")

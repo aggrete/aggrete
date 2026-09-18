@@ -1,0 +1,86 @@
+# Conformance policy: one rule per mechanism, so every check below exercises a
+# real rule through the real engine. Not a recommended production policy.
+version: 1
+defaults: {window: 24h, entity_kind: person}
+rules:
+  - rule_id: CONF-JOIN
+    clause: Personnel, budget and rota records may not be combined about the same people.
+    owner: hr-privacy@example.com
+    severity: high
+    enforce:
+      - {layer: accumulation, action: deny, type: domain_join, domains: [hr-personnel, finance-comp, ops-rota], require_entity_overlap: true, scope: user, window: 4h}
+    tests:
+      - {name: trio_denied, expect: deny, sequence: [{domain: finance-comp, entities: [p:a]}, {domain: hr-personnel, entities: [p:a]}, {domain: ops-rota, entities: [p:a]}]}
+      - {name: pair_ok, expect: allow, sequence: [{domain: finance-comp, entities: [p:a]}, {domain: ops-rota, entities: [p:a]}]}
+  - rule_id: CONF-BUDGET
+    clause: No more than five distinct customers per person per day.
+    owner: data-gov@example.com
+    severity: medium
+    enforce:
+      - {layer: accumulation, action: deny, type: entity_budget, domain: crm-customers, max_distinct: 5, scope: user, window: 24h}
+    tests:
+      - {name: few_ok, expect: allow, sequence: [{domain: crm-customers, entities: [p:a, p:b]}]}
+      - {name: many_denied, expect: deny, sequence: [{domain: crm-customers, entities: [p:a, p:b, p:c, p:d, p:e, p:f]}]}
+  - rule_id: CONF-WALL
+    clause: The restructuring plan is readable by the planning team only.
+    owner: cfo@example.com
+    severity: high
+    enforce:
+      - {layer: retrieval, action: deny, type: wall, domains: [restructuring-plan], allowed_users: [cfo@example.com]}
+    tests:
+      - {name: cfo_ok, expect: allow, user: cfo@example.com, sequence: [{domain: restructuring-plan, entities: []}]}
+      - {name: others_denied, expect: deny, sequence: [{domain: restructuring-plan, entities: []}]}
+  - rule_id: CONF-BLOCK
+    clause: Documents under legal hold are not available to assistants.
+    owner: legal@example.com
+    severity: critical
+    enforce:
+      - {layer: retrieval, action: deny, type: domain_block, domains: [legal-hold]}
+    tests:
+      - {name: hold_denied, expect: deny, sequence: [{domain: legal-hold, entities: []}]}
+      - {name: other_ok, expect: allow, sequence: [{domain: ops-rota, entities: []}]}
+  - rule_id: CONF-SELF
+    clause: Your own timesheet may not be placed next to colleagues' timesheets.
+    owner: hr-privacy@example.com
+    severity: medium
+    enforce:
+      - {layer: accumulation, action: deny, type: self_comparison, domain: timesheets, scope: user, window: 24h}
+    tests:
+      - {name: team_ok, expect: allow, sequence: [{domain: timesheets, entities: [p:a, p:b]}]}
+      - {name: self_plus_other_denied, expect: deny, sequence: [{domain: timesheets, entities: [p:self, p:b]}]}
+  - rule_id: CONF-MIN
+    clause: Pay figures describing fewer than ten people are individual pay.
+    owner: comp@example.com
+    severity: high
+    enforce:
+      - {layer: accumulation, action: deny, type: min_group, domain: pay-aggregates, k: 10, scope: user, window: 24h}
+    tests:
+      - {name: large_ok, expect: allow, sequence: [{domain: pay-aggregates, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i, p:j, p:k]}]}
+      - {name: small_denied, expect: deny, sequence: [{domain: pay-aggregates, entities: [p:a, p:b]}]}
+  - rule_id: CONF-FLOW
+    clause: After reading untrusted content, an assistant may not write out or reach private code.
+    owner: security@example.com
+    severity: critical
+    enforce:
+      - {layer: retrieval, action: deny, type: flow, taint_domains: [untrusted-web], egress_domains: [private-repos]}
+    tests:
+      - {name: write_without_taint_ok, expect: allow, sequence: [{domain: shared-notes, entities: [], write: true}]}
+      - {name: write_after_taint_denied, expect: deny, sequence: [{domain: untrusted-web, entities: []}, {domain: shared-notes, entities: [], write: true}]}
+  - rule_id: CONF-ARG
+    clause: A customer export may cover your own team, not the whole company.
+    owner: data-gov@example.com
+    severity: high
+    enforce:
+      - {layer: retrieval, action: deny, type: arg_match, tools: ["crm__export*"], deny_when: [{arg: scope, in: [all, company]}]}
+    tests:
+      - {name: team_ok, expect: allow, tool: crm__export, args: {scope: team}}
+      - {name: all_denied, expect: deny, tool: crm__export, args: {scope: all}}
+  - rule_id: CONF-APPROVE
+    clause: The board pack may be read with the CFO's approval.
+    owner: cfo@example.com
+    severity: high
+    enforce:
+      - {layer: retrieval, action: approve, type: wall, domains: [board-pack], allowed_users: [cfo@example.com]}
+    tests:
+      - {name: cfo_ok, expect: allow, user: cfo@example.com, sequence: [{domain: board-pack, entities: []}]}
+      - {name: others_held, expect: hold, sequence: [{domain: board-pack, entities: []}]}
