@@ -215,7 +215,38 @@ These already work in the open-source proxy today.
   a canned upstream, and a framework mapping; the report is committed at
   `docs/conformance-report.md`.
 
+- **Works inside the gateway you already run** *(shipped in 0.10)*.
+  Instead of adding a second hop, a gateway asks Aggrete before and after each
+  tool call and gets the same deterministic, stateful decision, redaction and
+  audit row.
+  *For example:* Docker's MCP gateway points two interceptors at Aggrete; IBM
+  ContextForge loads it as an external plugin; anything that speaks OpenID
+  AuthZEN calls `/access/v1/evaluation`.
+  *Under the hood:* `POST /v1/decide` (request and response phases), AuthZEN
+  1.0 with the COAZ-MCP mapping, Docker `before`/`after` http interceptors,
+  `python -m aggrete.adapters` as a ContextForge stdio plugin.
+
+- **Speaks MCP 2026-07-28** *(shipped in 0.10)*.
+  Multi-round-trip results (`input_required`) pass through untouched and policy
+  runs again on the retry; tool annotations, icons and metadata are preserved;
+  tool lists are marked private so no intermediary shares one person's list
+  with another; audit rows can be exported as OCSF API Activity events.
+  *Under the hood:* `InputRequiredResult` passthrough with `inputResponses` and
+  `requestState` forwarded byte-exact, the Tasks extension stripped from
+  forwarded capabilities, `cacheScope: private`, `audit_forward: {http: {format: ocsf}}`.
+
 ## Next (in progress)
+
+- **agentgateway ExtMCP adapter.**
+  agentgateway's MCP-native hook sees both phases, filters `tools/list`, and
+  carries identity in metadata, which makes it the best home for the engine.
+  It is gRPC on a published proto.
+  *Under the hood:* an ExtMCP gRPC server (`CheckRequest` / `CheckResponse`)
+  wrapping the same decider as `/v1/decide`; optional extra `aggrete[agentgateway]`.
+
+- **Tasks extension routing.**
+  Long-running tool calls under the MCP Tasks extension are stripped from
+  forwarded capabilities today; routing `tasks/*` through policy is next.
 
 - **Conformance you can point at any gateway.**
   Today's checks run in-process. The black-box form drives an MCP endpoint

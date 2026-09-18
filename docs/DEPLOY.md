@@ -41,6 +41,37 @@ HTTP mode refuses to start without an `auth:` block (opt into `mode: anonymous` 
 2. **Authentication:** pick **None** for the public demo (`https://try.aggrete.com/mcp` — anonymous, mock data); pick **Always required** for any real deployment. The accumulator keys on the token identity, so anonymous collapses every caller into one identity and the per-user memory stops meaning anything — OAuth is what makes the governance real.
 3. **Turn it on in the chat** and ask for it explicitly the first time (e.g. *"using aggrete, call `scenarios`"*). Adding a connector doesn't enable it per conversation, and Claude won't reach for a new one on generic chat.
 
+## The only path
+
+A policy is a control only if the proxy is the only road to the connectors.
+Three things make that true:
+
+1. **Connectors accept traffic only from the proxy hosts** (network policy,
+   allow-listed service accounts, the proxy's own credential).
+2. **The proxy holds the upstream credentials.** People sign in to the proxy;
+   the proxy signs in to the connectors. A caller's token is never forwarded.
+3. **Clients are told which server they may use.** For Claude Code, ship a
+   managed MCP file and lock it:
+
+```json
+// macOS: /Library/Application Support/ClaudeCode/managed-mcp.json
+// Linux: /etc/claude-code/managed-mcp.json   Windows: C:\Program Files\ClaudeCode\managed-mcp.json
+{"mcpServers": {"aggrete": {"type": "http", "url": "https://aggrete.corp.example/mcp"}}}
+```
+
+```json
+// managed-settings.json (same directory)
+{"allowManagedMcpServersOnly": true,
+ "allowedMcpServers": [{"serverUrl": "https://aggrete.corp.example/mcp"}],
+ "strictPluginOnlyCustomization": ["mcp"]}
+```
+
+With that in place `claude mcp add` is refused, project `.mcp.json` servers do
+not load, and claude.ai connectors are suppressed unless you allow them. See
+https://code.claude.com/docs/en/managed-mcp for the current keys. Claude
+Desktop and Claude in Slack do not yet document an equivalent lock; for those,
+item 1 is what holds. For gateways you already run, see [ADAPTERS.md](ADAPTERS.md).
+
 ## Per-user access (on-behalf-of)
 
 By default the proxy holds one credential per upstream and every caller shares it. Mark an upstream `per_user: true` and each caller instead reaches it with their *own* credential, resolved per request through an `obo` hook you control (a vault or token-exchange script), so the upstream sees the actual person — not a shared robot account. The proxy still never puts the caller's own token on the wire.

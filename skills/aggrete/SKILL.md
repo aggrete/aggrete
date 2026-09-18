@@ -203,6 +203,15 @@ Over HTTP, `/metrics` exposes the same decisions as Prometheus counters,
 `/readyz` tells you whether every upstream is connected, and `audit_forward:
 {otlp: ...}` streams rows to an OpenTelemetry collector.
 
+## Inside another gateway
+
+Already run agentgateway, Docker's MCP gateway, or IBM ContextForge? Run
+Aggrete with `upstreams: {}` and `adapters: {token: ...}` and let the gateway
+call `POST /v1/decide` (request and response phases), `POST
+/access/v1/evaluation` (OpenID AuthZEN), or the Docker `before`/`after`
+interceptor endpoints; for ContextForge, `python -m aggrete.adapters` is an
+external plugin. Same rules, memory, redaction and audit, no second hop.
+
 ## Conformance
 
 `aggrete conformance` runs sixteen checks against the real components and maps

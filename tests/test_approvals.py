@@ -88,7 +88,7 @@ def test_store_lifecycle(tmp_path):
 
 
 class FakeSession:
-    async def call_tool(self, tool, args):
+    async def call_tool(self, tool, args, **kw):
         return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps({"plan": "secret"}))])
 
 

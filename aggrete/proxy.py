@@ -256,11 +256,20 @@ class Proxy:
                         title=t.title,
                         description=description,
                         inputSchema=t.input_schema,
+                        # outputSchema is deliberately not forwarded: refusals, holds and
+                        # dry-run answers are text, and a schema-validating client would
+                        # reject them. structuredContent still passes through (redacted).
+                        icons=t.icons,
+                        annotations=t.annotations,
+                        execution=t.execution,
+                        _meta=t.meta,
                     )
                 )
         if self.cfg.get("builtin_tools", True):
             tools.extend(self._builtin_tools())
-        return types.ListToolsResult(tools=tools)
+        # The list varies by bearer token (walls hide tools per person), so it is
+        # cacheable only per user; never let an intermediary share it.
+        return types.ListToolsResult(tools=tools, cacheScope="private", ttlMs=0)
 
     def _builtin_tools(self) -> list[types.Tool]:
         """Tools the proxy answers itself, so the policy is explorable without
@@ -414,12 +423,21 @@ class Proxy:
                 if session is None:
                     return self._refuse(f"Unknown upstream {upstream!r}.")
                 t0 = time.monotonic()
-                result = await session.call_tool(tool, args)
+                result = await session.call_tool(tool, args, **self._mrtr_kwargs(params))
                 upstream_ms = round((time.monotonic() - t0) * 1000, 1)
         except Exception as e:
             self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
                             decision="deny", rule="obo-credential", evidence={"error": str(e)[:200]})
             return self._refuse(f"Could not reach {upstream!r} on your behalf: {e}")
+
+        if isinstance(result, types.InputRequiredResult):
+            # Multi-round-trip (spec 2026-07-28): the upstream needs more input from
+            # the client before it returns anything. Nothing was fetched yet; pass the
+            # request down unchanged and re-run policy when the retry arrives.
+            self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
+                            decision="input_required", rule=None,
+                            evidence={"requests": sorted((result.input_requests or {}).keys())})
+            return result
 
         # --- Layer 3/4, after the fetch ------------------------------------
         text = "\n".join(c.text for c in result.content if isinstance(c, types.TextContent))
@@ -442,6 +460,32 @@ class Proxy:
                 return await self._hold(name, domain, is_write, post, stage="post", audited=True)
             return self._refuse(post.explain())
         return result
+
+    @staticmethod
+    def _mrtr_kwargs(params) -> dict:
+        """Forward a retry's `inputResponses` and `requestState` upstream byte-exact,
+        and the client's declared capabilities, minus the Tasks extension, which
+        this proxy does not route (`tasks/*` would never reach the upstream)."""
+        kw: dict = {"allow_input_required": True}
+        if getattr(params, "input_responses", None):
+            kw["input_responses"] = params.input_responses
+        if getattr(params, "request_state", None):
+            kw["request_state"] = params.request_state
+        meta = getattr(params, "meta", None)
+        if meta:
+            try:
+                m = dict(meta) if not hasattr(meta, "model_dump") else meta.model_dump(by_alias=True, exclude_none=True)
+                caps = m.get("io.modelcontextprotocol/clientCapabilities") or m.get("clientCapabilities")
+                if isinstance(caps, dict) and isinstance(caps.get("extensions"), dict):
+                    caps = {**caps, "extensions": {k: v for k, v in caps["extensions"].items()
+                                                   if k != "io.modelcontextprotocol/tasks"}}
+                    for key in ("io.modelcontextprotocol/clientCapabilities", "clientCapabilities"):
+                        if key in m:
+                            m[key] = caps
+                kw["meta"] = m
+            except Exception:
+                pass
+        return kw
 
     # ---------- human-in-the-loop ----------
 
@@ -521,6 +565,19 @@ class Proxy:
             else:
                 new_content.append(c)
         result.content = new_content
+        if result.structured_content is not None:
+            def walk(v):
+                if isinstance(v, str):
+                    masked, counts = redact(v, self.redact_rules)
+                    for k, n in counts.items():
+                        total[k] = total.get(k, 0) + n
+                    return masked
+                if isinstance(v, dict):
+                    return {k: walk(val) for k, val in v.items()}
+                if isinstance(v, list):
+                    return [walk(val) for val in v]
+                return v
+            result.structured_content = walk(result.structured_content)
         return result, total
 
     # ---------- built-in tools: check and scenarios ----------
@@ -736,6 +793,9 @@ def build_http_app(server: Server, cfg: dict, connect, proxy_ref: "Proxy | None"
         routes += approval_routes(proxy_ref, auth_cfg)
     if proxy_ref is not None:
         routes += ops_routes(proxy_ref, cfg)
+    if proxy_ref is not None and (cfg.get("adapters") or {}).get("enabled", True) and not anonymous:
+        from .adapters import adapter_routes
+        routes += adapter_routes(proxy_ref, cfg)
 
     @contextlib.asynccontextmanager
     async def lifespan(app):

@@ -161,6 +161,14 @@ audit_forward:
 Best effort, off the hot path. The local hash-chained file stays the system of
 record. Verify it with `aggrete-audit audit.jsonl`.
 
+## Adapter mode
+
+```yaml
+adapters:
+  token: "${ADAPTER_TOKEN}"   # the gateway's bearer for /v1/decide, /access/v1/evaluation, /adapters/docker/*
+  enabled: true
+```
+
 ## Operations (HTTP mode)
 
 `/healthz` (liveness), `/readyz` (503 until every upstream is connected), and

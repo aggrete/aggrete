@@ -51,7 +51,7 @@ class FakeSession:
     def __init__(self):
         self.calls = 0
 
-    async def call_tool(self, tool, args):
+    async def call_tool(self, tool, args, **kw):
         self.calls += 1
         people = [{"name": "Alice", "email": "alice@example.com", "ssn": "123-45-6789"},
                   {"name": "Bob", "email": "bob@example.com"}]

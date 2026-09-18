@@ -15,6 +15,7 @@ breaks a tool call. Dependency-free (stdlib urllib / socket).
     # or any OpenTelemetry collector (OTLP/HTTP JSON logs)
     audit_forward:
       otlp: {endpoint: "http://otel-collector:4318/v1/logs"}
+    # add `format: ocsf` to `http:` to send OCSF v1.9 API Activity events instead of raw rows
 """
 
 from __future__ import annotations
@@ -138,6 +139,61 @@ def _otlp_sink(endpoint: str, headers: dict, service_name: str = "aggrete"):
     return sink
 
 
+# ---------- OCSF (Open Cybersecurity Schema Framework) ----------
+
+_OCSF_DECISION = {
+    #  decision      action_id, action,     disposition_id, disposition, status_id, status
+    "allow":          (1, "Allowed",  1, "Allowed",   1, "Success"),
+    "deny":           (2, "Denied",   2, "Blocked",   2, "Failure"),
+    "hold":           (3, "Observed", 14, "Delayed",  0, "Unknown"),
+    "input_required": (3, "Observed", 1, "Allowed",   0, "Unknown"),
+    "approved":       (1, "Allowed",  1, "Allowed",   1, "Success"),
+    "denied":         (2, "Denied",   2, "Blocked",   2, "Failure"),
+}
+_OCSF_SEVERITY = {"deny": 3, "hold": 2, "allow": 1}
+
+
+def ocsf_event(row: dict, product_version: str = "0") -> dict:
+    """One audit row as an OCSF v1.9 API Activity (class 6003) event with the
+    security_control profile. Rule id and text go in `policy`, the human reason
+    in `status_detail`, the tool in `resources`, the person in `actor.user`."""
+    decision = str(row.get("decision") or "allow")
+    action_id, action, disp_id, disp, status_id, status = _OCSF_DECISION.get(decision, _OCSF_DECISION["allow"])
+    if decision == "allow" and row.get("redacted"):
+        action_id, action, disp_id, disp = 4, "Modified", 11, "Corrected"
+    activity_id = 3 if row.get("write") else 2
+    tool = str(row.get("tool") or "")
+    upstream, _, short = tool.partition("__")
+    ev = {
+        "class_uid": 6003, "class_name": "API Activity", "category_uid": 6, "category_name": "Application Activity",
+        "activity_id": activity_id, "activity_name": "Update" if activity_id == 3 else "Read",
+        "type_uid": 600300 + activity_id,
+        "time": int(float(row.get("ts") or 0) * 1000),
+        "severity_id": _OCSF_SEVERITY.get(decision, 1),
+        "status_id": status_id, "status": status,
+        "status_code": str(row.get("rule") or decision),
+        "message": f"{decision} tools/call {tool} for {row.get('user')}",
+        "action_id": action_id, "action": action, "disposition_id": disp_id, "disposition": disp,
+        "is_alert": decision in ("deny", "hold") or bool(row.get("alerts")),
+        "metadata": {"product": {"name": "Aggrete", "vendor_name": "Aggrete", "version": product_version},
+                     "version": "1.9.0", "profiles": ["security_control"],
+                     "uid": str(row.get("hash") or ""), "log_name": "aggrete.audit"},
+        "actor": {"user": {"email_addr": row.get("user"), "type_id": 1}},
+        "api": {"operation": "tools/call" if row.get("stage") != "check" else "aggrete/check",
+                "service": {"name": upstream or "aggrete"}},
+        "resources": [{"type": "mcp_tool", "name": short or tool, "uid": tool, "role_id": 1, "role": "Target",
+                       "data": {"domain": row.get("domain"), "stage": row.get("stage")}}],
+        "src_endpoint": {"svc_name": "mcp-client"},
+        "unmapped": {k: v for k, v in row.items() if k in ("evidence", "alerts", "redacted", "entities", "purpose", "upstream_ms", "prev")},
+    }
+    if row.get("rule"):
+        ev["policy"] = {"uid": str(row["rule"]), "name": str(row["rule"]), "is_applied": True}
+        ev["actor"]["authorizations"] = [{"decision": disp.lower(), "policy": {"uid": str(row["rule"])}}]
+    if isinstance(row.get("evidence"), dict) and row["evidence"].get("approval"):
+        ev["status_detail"] = f"held for approval {row['evidence']['approval']}"
+    return ev
+
+
 def build_forwarder(cfg: dict | None) -> Forwarder | None:
     """Build a forwarder from an `audit_forward:` block, or None when unset.
     URL and header values may reference ${ENV} so tokens stay out of the config."""
@@ -147,7 +203,18 @@ def build_forwarder(cfg: dict | None) -> Forwarder | None:
         h = cfg["http"]
         url = os.path.expandvars(h["url"])
         headers = {k: os.path.expandvars(str(v)) for k, v in (h.get("headers") or {}).items()}
-        return Forwarder(_http_sink(url, headers), "http")
+        sink = _http_sink(url, headers)
+        if h.get("format") == "ocsf":
+            try:
+                from importlib.metadata import version as _pv
+                ver = _pv("aggrete")
+            except Exception:
+                ver = "0"
+            raw = sink
+            def sink(row: dict, _raw=raw, _ver=ver) -> None:  # noqa: E306
+                _raw(ocsf_event(row, _ver))
+            return Forwarder(sink, "http-ocsf")
+        return Forwarder(sink, "http")
     if cfg.get("otlp"):
         o = cfg["otlp"]
         endpoint = os.path.expandvars(o.get("endpoint") or o.get("url") or "http://localhost:4318/v1/logs")

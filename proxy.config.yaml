@@ -46,6 +46,13 @@ audit_log: audit.jsonl
 #   # or any OpenTelemetry collector (OTLP/HTTP JSON logs):
 #   # otlp: {endpoint: "http://otel-collector:4318/v1/logs", headers: {x-api-key: "${OTEL_KEY}"}}
 
+# Adapter mode (HTTP): serve decisions to a gateway you already run, at
+# POST /v1/decide, /access/v1/evaluation (AuthZEN) and /adapters/docker/*.
+# The gateway presents `token` as a bearer. See docs/ADAPTERS.md.
+# adapters:
+#   token: "${ADAPTER_TOKEN}"
+#   enabled: true
+
 # Operations (HTTP mode): /healthz, /readyz and Prometheus /metrics are served
 # unauthenticated by default. Require a bearer token on /metrics, or turn it off.
 # metrics:
