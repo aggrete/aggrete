@@ -92,5 +92,25 @@ def identity_for(token: AccessToken, claim: str | None = None) -> str:
     raise ValueError("token carries no usable identity claim")
 
 
+def agent_for(token: AccessToken, claim: str | None = None, labels: dict | None = None) -> str | None:
+    """The agent (assistant application) a call came from, as distinct from the
+    person it acts for. Order: a configured claim; the RFC 8693 actor claim
+    (`act.sub`, set when an agent acts on a person's behalf via token exchange);
+    the authorized party (`azp`) or `client_id` claim; the OAuth client id.
+    `labels` maps raw ids to readable names (dynamic client ids are opaque)."""
+    claims = token.claims or {}
+    raw = None
+    if claim and claims.get(claim):
+        raw = claims[claim]
+    elif isinstance(claims.get("act"), dict) and claims["act"].get("sub"):
+        raw = claims["act"]["sub"]
+    else:
+        raw = claims.get("azp") or claims.get("client_id") or token.client_id
+    if not raw or raw == "static":
+        return None
+    raw = str(raw)
+    return str((labels or {}).get(raw, raw))
+
+
 def unexpired(token: AccessToken) -> bool:
     return token.expires_at is None or token.expires_at > time.time()

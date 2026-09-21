@@ -35,7 +35,7 @@ from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
-from .auth import build_verifier, identity_for, unexpired
+from .auth import agent_for, build_verifier, identity_for, unexpired
 from .entities import extract
 from .policy import Engine
 from .audit import Audit
@@ -79,6 +79,25 @@ class Proxy:
         self.sessions: dict[str, ClientSession] = {}
         self.static_user = config.get("user", "unknown")
         self.identity_claim = (config.get("auth") or {}).get("identity_claim")
+        # Agents are first-class subjects: each audit row names the agent that made
+        # the call as well as the person it acted for. Memory stays keyed to the
+        # person, because what matters is what that person has ended up seeing.
+        self.agent_claim = (config.get("auth") or {}).get("agent_claim")
+        self.agent_labels = config.get("agent_labels") or {}
+        self.static_agent = config.get("agent")
+        _emit = audit.emit
+        def _emit_with_agent(**row):
+            if not row.get("agent"):
+                try:
+                    a = self.agent
+                except Exception:
+                    a = None
+                if a:
+                    row["agent"] = a
+            else:
+                row["agent"] = str(self.agent_labels.get(row["agent"], row["agent"]))
+            _emit(**row)
+        audit.emit = _emit_with_agent
         self.redact_rules = rules_from_config(config.get("redact"))
         # Tool integrity (rug-pull / poisoning). Off unless `tool_integrity:` is set.
         self.integrity_cfg = config.get("tool_integrity") or {}
@@ -107,6 +126,15 @@ class Proxy:
         if not unexpired(token):
             raise PermissionError("token expired")
         return identity_for(token, self.identity_claim)
+
+    @property
+    def agent(self) -> str | None:
+        """Which agent is calling. From the token over HTTP; `agent:` in the config for stdio."""
+        from mcp.server.auth.middleware.auth_context import get_access_token
+        token = get_access_token()
+        if token is None:
+            return self.static_agent
+        return agent_for(token, self.agent_claim, self.agent_labels)
 
     def domain_for(self, tool: str) -> str:
         for pattern, domain in self.cfg.get("domains", {}).items():

@@ -16,7 +16,7 @@ agentgateway config (standalone):
           - kind: remote
             host: localhost:9001
             failureMode: failClosed
-            metadata: {user: jwt.email, tool: mcp.tool.name}
+            metadata: {user: jwt.email, tool: mcp.tool.name, agent: jwt.azp}
             methods: {"tools/call": full, "tools/list": response}
 
 `metadata.user` is who the policy is evaluated for; without it every call is
@@ -103,7 +103,7 @@ def build_servicer(proxy, user_key: str = "user", tool_key: str = "tool"):
             svc = list(request.service_names)
             tool = _qualify(svc, str(params.get("name") or ""))
             with lock:
-                out = decider.request(user, tool, params.get("arguments") or {}, "agentgateway")
+                out = decider.request(user, tool, params.get("arguments") or {}, "agentgateway", agent=(str(meta.get("agent")) if meta.get("agent") else None))
                 last_tool[(user, svc[0] if svc else "")] = tool
             md = {"aggrete_decision": out["decision"]}
             if out.get("rule"):
@@ -159,7 +159,7 @@ def build_servicer(proxy, user_key: str = "user", tool_key: str = "tool"):
             if not tool:
                 return pb.McpResponseResult(**{"pass": pb.Pass()})
             with lock:
-                out = decider.response(user, tool, _result_text(result), "agentgateway")
+                out = decider.response(user, tool, _result_text(result), "agentgateway", agent=(str(meta.get("agent")) if meta.get("agent") else None))
             if out["decision"] == "allow":
                 return pb.McpResponseResult(**{"pass": pb.Pass()})
             if out["decision"] == "rewrite":

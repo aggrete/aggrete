@@ -13,6 +13,7 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 #   jwks_url: https://login.example.com/.well-known/jwks.json   # default: <issuer>/.well-known/jwks.json
 #   required_scopes: [mcp]
 #   identity_claim: email          # default order: email, preferred_username, sub
+#   agent_claim: azp               # which claim names the agent; default: act.sub, then azp, client_id
 #   resource_url: https://aggrete.internal.example.com/mcp      # publishes RFC 9728 metadata
 # No identity provider yet: built-in sign-in (OAuth server inside the proxy; Claude and Cursor
 # register themselves and send people to /signin). Passcodes from the environment.
@@ -32,6 +33,8 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 # http:
 #   allowed_hosts: [aggrete.internal.example.com]
 #   session_idle_timeout: 1800
+# agent: my-assistant             # stdio only: the agent recorded on each audit row
+# agent_labels: {"9f2c-dcr-client": "Cursor"}   # readable names for opaque client ids
 audit_log: audit.jsonl
 
 # Ship each audit row to a SIEM as it is written (best-effort, off the hot path).

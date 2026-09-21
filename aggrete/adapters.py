@@ -39,7 +39,7 @@ class Decider:
     def _refusal(self, decision: str, code: str, reason: str, **extra) -> dict:
         return {"decision": decision, "code": code, "reason": reason, **extra}
 
-    def request(self, subject: str, tool: str, arguments: dict | None, gateway: str = "") -> dict:
+    def request(self, subject: str, tool: str, arguments: dict | None, gateway: str = "", agent: str | None = None) -> dict:
         """Everything the proxy decides before it would contact the upstream."""
         p = self.p
         args = dict(arguments or {})
@@ -49,7 +49,7 @@ class Decider:
         if p.rate_limiter is not None:
             ok, count = p.rate_limiter.allow(subject)
             if not ok:
-                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter",
+                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter", agent=agent,
                              decision="deny", rule="rate-limit", evidence={"count": count})
                 return self._refusal("deny", "RESOURCE_EXHAUSTED", "rate limit exceeded", rule="rate-limit", **base)
         if not p._tool_allowed(tool):
@@ -57,14 +57,14 @@ class Decider:
         if not p.engine.tool_visible(subject, domain):
             d = p.engine.pre_call(subject, domain, is_write=is_write)
             if not d.allow and not d.needs_approval:
-                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter",
+                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter", agent=agent,
                              decision="deny", rule=d.rule_id, evidence=d.evidence)
                 return self._refusal("deny", "PERMISSION_DENIED", d.explain(), rule=d.rule_id, **base)
         if p.inbound_rules and args:
             args, hits = p._scan_inbound(args)
             if hits:
                 blocked = p.inbound_action == "block"
-                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter",
+                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter", agent=agent,
                              decision="deny" if blocked else "allow", rule="inbound-secret", evidence={"hits": hits})
                 if blocked:
                     return self._refusal("deny", "PERMISSION_DENIED", f"arguments contain a secret ({', '.join(hits)})",
@@ -76,10 +76,10 @@ class Decider:
                     req, created = p.approvals.request(subject, d.rule_id, tool, domain, d.clause or "", d.owner or "", d.remediation or "")
                     if created:
                         p.approvals.notify(req, p._approve_hint(req["id"]))
-                    p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter",
+                    p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter", agent=agent,
                                  decision="hold", rule=d.rule_id, evidence={**d.evidence, "approval": req["id"]})
                     return self._refusal("hold", "PERMISSION_DENIED", d.explain(), rule=d.rule_id, approval=req["id"], **base)
-                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter",
+                p.audit.emit(user=subject, tool=tool, domain=domain, stage="pre", write=is_write, via=gateway or "adapter", agent=agent,
                              decision="deny", rule=d.rule_id, evidence=d.evidence)
                 return self._refusal("deny", "PERMISSION_DENIED", d.explain(), rule=d.rule_id, **base)
         out = {"decision": "allow", **base}
@@ -87,7 +87,7 @@ class Decider:
             out["decision"] = "rewrite"; out["arguments"] = args
         return out
 
-    def response(self, subject: str, tool: str, result_text: str, gateway: str = "") -> dict:
+    def response(self, subject: str, tool: str, result_text: str, gateway: str = "", agent: str | None = None) -> dict:
         """Everything the proxy decides after the upstream answered: record who
         appeared, re-evaluate, and redact. `result_text` is the tool's text output
         (JSON or prose)."""
@@ -97,7 +97,7 @@ class Decider:
         ents = extract(result_text or "")
         post = p.engine.post_call(subject, domain, ents)
         masked, counts = (redact(result_text or "", p.redact_rules) if p.redact_rules else (result_text, {}))
-        p.audit.emit(user=subject, tool=tool, domain=domain, stage="post", write=is_write, via=gateway or "adapter",
+        p.audit.emit(user=subject, tool=tool, domain=domain, stage="post", write=is_write, via=gateway or "adapter", agent=agent,
                      entities=len(ents), decision="deny" if not post.allow else "allow",
                      entity_ids=(ents if p.cfg.get("audit_entities", True) else None),
                      rule=post.rule_id, alerts=post.alerts, evidence=post.evidence, redacted=(counts or None))
@@ -164,11 +164,13 @@ def adapter_routes(proxy, cfg: dict) -> list:
             return JSONResponse({"error": "subject and tool are required"}, status_code=400)
         phase = body.get("phase", "request")
         gw = str(body.get("gateway") or "decide")
+        ag = body.get("agent")
+        ag = str(ag.get("id")) if isinstance(ag, dict) and ag.get("id") else (str(ag) if isinstance(ag, str) and ag else None)
         if phase == "response":
             out = decider.response(subject, tool, _result_text(body.get("result")) if isinstance(body.get("result"), dict)
-                                   else str(body.get("result") or ""), gw)
+                                   else str(body.get("result") or ""), gw, agent=ag)
         else:
-            out = decider.request(subject, tool, body.get("arguments") or {}, gw)
+            out = decider.request(subject, tool, body.get("arguments") or {}, gw, agent=ag)
         return JSONResponse(out)
 
     async def authzen(request):

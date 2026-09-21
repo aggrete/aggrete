@@ -12,6 +12,10 @@ audit_entities: true                # record which people appeared in each resul
 default_domain: unclassified        # for tools no `domains:` pattern matches
 ```
 
+Every audit row names the person (`user`) and the agent that made the call
+(`agent`). Memory stays keyed to the person. `agent: <name>` sets it for stdio;
+`agent_labels: {<client id>: <name>}` gives opaque client ids readable names.
+
 ## Upstreams
 
 ```yaml
@@ -68,6 +72,7 @@ auth:
   jwks_url: https://login.example.com/.well-known/jwks.json   # default: <issuer>/.well-known/jwks.json
   required_scopes: [mcp]
   identity_claim: email             # default order: email, preferred_username, sub
+  agent_claim: azp                  # which claim names the agent; default: act.sub, then azp, client_id
   resource_url: https://aggrete.internal.example.com/mcp      # publishes RFC 9728 metadata
 ```
 

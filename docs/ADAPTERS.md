@@ -33,7 +33,7 @@ Tool names must be the namespaced form the policy's `domains:` map expects
 Request phase, before the tool runs:
 
 ```json
-{"phase": "request", "subject": {"id": "alice@example.com"},
+{"phase": "request", "subject": {"id": "alice@example.com"}, "agent": {"id": "planning-agent"},
  "tool": "crm__export", "arguments": {"scope": "all"}, "gateway": "myproxy"}
 ```
 ```json
@@ -133,13 +133,14 @@ policies:
       - kind: remote
         host: localhost:9001
         failureMode: failClosed
-        metadata: {user: jwt.email, tool: mcp.tool.name}
+        metadata: {user: jwt.email, tool: mcp.tool.name, agent: jwt.azp}
         methods: {"tools/call": full, "tools/list": response}
 ```
 
 - **`metadata.user`** is who the policy is evaluated for. Without it every call
   is refused, because there is no one to keep memory about. Use `jwt.sub` if
   your tokens carry no email, and `--user-key` if you name the key differently.
+- **`metadata.agent`** (optional) names the agent that made the call, recorded next to the person on every audit row.
 - **`metadata.tool`** tells the response phase which tool produced a result;
   the ExtMCP response message does not carry the request. If it is missing the
   adapter falls back to the last tool that person called on that backend.

@@ -72,6 +72,33 @@ https://code.claude.com/docs/en/managed-mcp for the current keys. Claude
 Desktop and Claude in Slack do not yet document an equivalent lock; for those,
 item 1 is what holds. For gateways you already run, see [ADAPTERS.md](ADAPTERS.md).
 
+## Agents as subjects
+
+Every audit row names two parties: `user`, the person a call was made for, and
+`agent`, the assistant or task agent that made it. Memory stays keyed to the
+person on purpose. If Maya's planning agent pulls the budget and her reporting
+agent pulls the rota, it is still Maya who ends up holding both, so the
+combination rule still fires.
+
+Where the agent comes from, in order:
+
+1. `auth.agent_claim`, if you name a claim.
+2. The RFC 8693 actor claim, `act.sub`, which a token exchange sets when an agent acts on someone's behalf.
+3. The authorized party (`azp`) or `client_id` claim, then the OAuth client id.
+4. Over stdio, the `agent:` value in the config.
+
+Dynamic client ids are opaque, so map them to names you recognise:
+
+```yaml
+auth: {mode: jwt, issuer: ..., audience: ..., agent_claim: azp}
+agent_labels: {"9f2c-dcr-client": "Cursor", "svc-onboarding": "Onboarding agent"}
+```
+
+Gateways pass the agent explicitly: `"agent": {"id": "..."}` in `/v1/decide`,
+and `agent: jwt.azp` in agentgateway's processor metadata. The console's People
+view turns this into a roster: each agent, who it acts for, what it was allowed,
+refused and held, and the agents-per-person ratio.
+
 ## Per-user access (on-behalf-of)
 
 By default the proxy holds one credential per upstream and every caller shares it. Mark an upstream `per_user: true` and each caller instead reaches it with their *own* credential, resolved per request through an `obo` hook you control (a vault or token-exchange script), so the upstream sees the actual person — not a shared robot account. The proxy still never puts the caller's own token on the wire.

@@ -187,7 +187,7 @@ scanning, and SIEM forwarding: [references/config.md](references/config.md).
 ## Reading the audit log
 
 Each line in `audit.jsonl` is one decision, hash-chained to the previous line.
-Common fields: `ts`, `user`, `tool`, `domain`, `stage` (`pre`, `post`,
+Common fields: `ts`, `user` (the person), `agent` (the assistant that made the call), `tool`, `domain`, `stage` (`pre`, `post`,
 `check`, `integrity`), `write`, `decision`, `rule`, and redaction counts on
 post rows. Verify the chain and locate the first tampered line:
 
