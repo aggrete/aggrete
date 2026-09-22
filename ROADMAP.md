@@ -258,6 +258,18 @@ These already work in the open-source proxy today.
   `--write-fixture`, framework mapping with "not observable" where the outside
   cannot see.
 
+- **Agents are named on every record** *(shipped in 0.12)*.
+  Each decision names the assistant or task agent that made the call and the
+  person it acted for. What a person has seen is still counted per person, so
+  using two agents is not a way around a rule.
+  *For example:* Maya's planning agent pulls the budget and her reporting agent
+  pulls the rota; the third read is still refused, and the console's roster
+  shows both agents, who they act for, and what each was allowed, refused and held.
+  *Under the hood:* `agent` on every audit row from the RFC 8693 actor claim,
+  `azp`/`client_id`, a configured `agent_claim`, or `agent:` for stdio;
+  `agent_labels` for opaque client ids; `agent` in `/v1/decide` and ExtMCP
+  metadata; the roster and agents-per-person ratio in the console.
+
 ## Next (in progress)
 
 - **Tasks extension routing.**
