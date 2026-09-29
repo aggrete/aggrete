@@ -1,0 +1,14 @@
+# FOSSA license and dependency scanning. Runs in CI (.github/workflows/fossa.yml)
+# once the FOSSA_API_KEY repository secret exists. Locally: `fossa analyze`.
+version: 3
+project:
+  id: github.com/aggrete/aggrete
+  name: aggrete
+  url: https://github.com/aggrete/aggrete
+  policy: standard
+targets:
+  only:
+    - type: pip
+      path: .
+    - type: setuptools
+      path: .

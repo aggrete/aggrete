@@ -4,6 +4,9 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/aggrete)](https://pypi.org/project/aggrete/)
 [![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/aggrete/aggrete/blob/main/LICENSE)
 [![Glama quality](https://glama.ai/mcp/servers/Aggrete/aggrete/badges/score.svg)](https://glama.ai/mcp/servers/Aggrete/aggrete)
+<!-- FOSSA badge: uncomment after the first successful scan (see .github/workflows/fossa.yml)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Faggrete%2Faggrete.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Faggrete%2Faggrete?ref=badge_shield)
+-->
 
 **An MCP proxy that enforces a code-of-conduct document across connectors, with per-user memory that accumulates across calls.**
 

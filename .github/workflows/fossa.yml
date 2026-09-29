@@ -1,0 +1,33 @@
+name: fossa
+
+# License and dependency scan with FOSSA. Uploads the dependency graph on every
+# push to main and on pull requests, then runs `fossa test` so a dependency
+# whose license breaks the policy fails the PR. Skips cleanly when the
+# FOSSA_API_KEY secret is not set (forks, or before the account exists).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fossa:
+    runs-on: ubuntu-latest
+    env:
+      FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip when no API key is configured
+        if: env.FOSSA_API_KEY == ''
+        run: echo "FOSSA_API_KEY is not set; skipping the scan."
+      - uses: fossas/fossa-action@v1
+        if: env.FOSSA_API_KEY != ''
+        with:
+          api-key: ${{ env.FOSSA_API_KEY }}
+      - uses: fossas/fossa-action@v1
+        if: env.FOSSA_API_KEY != ''
+        with:
+          api-key: ${{ env.FOSSA_API_KEY }}
+          run-tests: true
