@@ -12,6 +12,14 @@ Four individually-authorized questions can assemble a layoff list — no single 
 
 **[Try it live](https://try.aggrete.com)** — nothing to install · or `uvx aggrete --demo`
 
+## Start with a scan
+
+```bash
+pip install aggrete && aggrete scan
+```
+
+Finds every MCP server your clients use, connects to each, and prints what no per-server scanner does: tool combinations across servers that form a leak path, hidden instructions in descriptions, secrets in client configs, servers that bypass the proxy. `--fix` writes the config and policy that close them. [Details](docs/SCAN.md).
+
 ## Install
 
 ```bash
@@ -51,6 +59,7 @@ Each call is fine alone. The third completes a forbidden set across three domain
 - **[Deploying](docs/DEPLOY.md)** — architecture, the deploy matrix, HTTP + OAuth, connecting Claude, and per-user credentials
 - **[Building a connector](docs/CONNECTORS.md)** — expose read/write tools and govern any system (Google Drive is the reference)
 - **[Adapter mode](docs/ADAPTERS.md)** — run the engine inside agentgateway (native ExtMCP over gRPC, `aggrete extmcp`), Docker MCP Gateway, IBM ContextForge or any AuthZEN-speaking gateway
+- **[Scanning](docs/SCAN.md)** — `aggrete scan` hardens an existing MCP setup: cross-server leak paths, poisoned descriptions, secrets in configs, proxy bypasses, and a one-command fix
 - **[Conformance](docs/CONFORMANCE.md)** — `aggrete conformance` runs sixteen checks against the real components and maps them onto the OWASP MCP Top 10, OWASP Agentic Top 10, CoSAI and AIUC-1; `--url` runs the same scenarios black-box against any gateway ([latest report](docs/conformance-report.md))
 - **[Roadmap](ROADMAP.md)** — shipped, in progress, and planned
 - **[Agent skill](skills/aggrete/SKILL.md)** — teach Claude Code or any MCP client to set up and operate Aggrete: `/plugin marketplace add aggrete/aggrete`, or read `skill://aggrete/SKILL.md` from a running proxy

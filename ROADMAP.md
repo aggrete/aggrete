@@ -270,6 +270,18 @@ These already work in the open-source proxy today.
   `agent_labels` for opaque client ids; `agent` in `/v1/decide` and ExtMCP
   metadata; the roster and agents-per-person ratio in the console.
 
+- **Find the leak paths before the proxy is even installed** *(shipped in 0.13)*.
+  One command reads every MCP client config on a machine, connects to each
+  server, and prints what no per-server scanner does: tool combinations across
+  servers that form a known leak path, hidden instructions in descriptions,
+  credentials sitting in configs, servers that bypass the proxy.
+  *For example:* `aggrete scan` on a laptop reports "personnel + budget + rota
+  reachable: the layoff-list path" and "an untrusted reader next to a writer",
+  then `--fix` writes the proxy config and the two rules that close them.
+  *Under the hood:* `aggrete/scan.py`; discovery for Claude Code, Claude
+  Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex; fingerprint pins;
+  domain classification by name and description; optional GitHub scope check.
+
 ## Next (in progress)
 
 - **Tasks extension routing.**

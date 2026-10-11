@@ -727,6 +727,9 @@ def cli() -> None:
     # Subcommands that are not the server: run synchronously, outside the loop.
     if len(sys.argv) > 1 and sys.argv[1] in ("approvals", "approve", "deny"):
         raise SystemExit(approvals_mod.cli(sys.argv[1:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "scan":
+        from . import scan
+        raise SystemExit(scan.cli(sys.argv[1:]))
     if len(sys.argv) > 1 and sys.argv[1] == "extmcp":
         from . import extmcp
         raise SystemExit(extmcp.cli(sys.argv[1:]))

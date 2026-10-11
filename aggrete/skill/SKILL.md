@@ -19,6 +19,17 @@ Two files matter:
 | `coc.yaml` | The clause owners (HR, Legal, Security) | Rules: clause text, enforcement, tests |
 | `proxy.config.yaml` | Engineering | Upstreams, tool→domain map, auth, redaction, audit |
 
+## Scan first
+
+`aggrete scan` reads every MCP client config on the machine (Claude Code,
+Claude Desktop, Cursor, VS Code, Windsurf, Gemini CLI, Codex), connects to
+each server, and reports cross-server leak paths (personnel + budget + rota;
+an untrusted reader next to a writer), poisoned descriptions, secrets in
+configs, and servers that bypass the proxy. `--fix DIR` writes a
+`proxy.config.yaml` and `coc.yaml` that close exactly what it found; review
+the domain map, then run the proxy from it. `--format json` exits non-zero on
+a high finding, for CI.
+
 ## Quick start
 
 ```bash
