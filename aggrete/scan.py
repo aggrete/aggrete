@@ -173,6 +173,19 @@ NOT_VISIBLE = [
 ]
 
 
+def _expand_plugin_root(spec: dict, path: str) -> dict:
+    """Plugin configs refer to ${CLAUDE_PLUGIN_ROOT}; resolve it to the plugin's own directory."""
+    root = str(Path(path).parent)
+    def ex(v):
+        return v.replace("${CLAUDE_PLUGIN_ROOT}", root) if isinstance(v, str) else v
+    out = dict(spec)
+    if "CLAUDE_PLUGIN_ROOT" in json.dumps(spec, default=str):
+        out["_root"] = root
+        out["command"] = ex(spec.get("command")); out["args"] = [ex(a) for a in spec.get("args") or []]
+        out["env"] = {k: ex(v) for k, v in (spec.get("env") or {}).items()}
+    return out
+
+
 # ---------- classification ----------
 
 DOMAIN_HINTS = {
@@ -180,7 +193,7 @@ DOMAIN_HINTS = {
     "finance-comp": ["budget", "salary", "pay", "comp", "payroll", "finance", "invoice", "expense", "ledger"],
     "ops-rota": ["oncall", "on_call", "rota", "roster", "shift", "schedule", "pagerduty", "opsgenie"],
     "untrusted-web": ["fetch", "browse", "web", "http", "url", "scrape", "search", "public_post", "rss", "read_page", "crawl"],
-    "private-code": ["repo", "git", "code", "source", "commit", "pull_request", "branch"],
+    "private-code": ["repo", "repository", "git", "github", "gitlab", "commit", "pull_request", "branch", "source_code", "codebase"],
     "crm-customers": ["crm", "customer", "account", "lead", "contact", "salesforce", "hubspot", "deal", "opportunity"],
     "secrets-store": ["secret", "vault", "credential", "api_key", "token", "password", "kms"],
     "shared-notes": ["note", "wiki", "doc", "page", "confluence", "notion", "drive", "file"],
@@ -364,20 +377,22 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
         for name, spec in src["servers"].items():
             if not isinstance(spec, dict):
                 continue
+            spec = _expand_plugin_root(spec, src["path"])
             cmd_key = sys.executable if spec.get("command") in ("python", "python3") else spec.get("command")
-            key = json.dumps({"c": cmd_key, "a": spec.get("args"), "u": spec.get("url")}, sort_keys=True)
+            key = json.dumps({"c": cmd_key, "a": spec.get("args"), "u": spec.get("url"), "cwd": spec.get("_root")}, sort_keys=True)
             dup = key in seen_keys; seen_keys.add(key)
             srv = {"name": name, "client": src["client"], "path": src["path"], "transport": "http" if spec.get("url") else "stdio",
                    "target": spec.get("url") or " ".join([str(spec.get("command") or "")] + [str(a) for a in spec.get("args") or []]),
                    "aggrete": is_aggrete(name, spec, proxy_host), "tools": [], "domains": set(), "writes": [], "status": "not connected", "dup": dup}
-            has_proxy = has_proxy or srv["aggrete"]
+            demo = "try.aggrete.com" in str(spec.get("url") or "") or name == "aggrete-demo"
+            srv["demo"] = srv["aggrete"] and demo
+            has_proxy = has_proxy or (srv["aggrete"] and not demo) or bool(proxy_host)
             for where, kind in secrets_in(spec):
                 finding("high", "secret-in-config", f"A {kind.replace('_', ' ')} sits in {src['client']}'s config for '{name}'",
                         f"{where} in {src['path']}. Anyone who can read that file holds the credential, and every tool call carries it.",
                         name, "Move it to the environment and reference it as ${VAR}; with the proxy, the credential lives only on the proxy host.")
-            if spec.get("url") and not (spec.get("headers") or {}).get("Authorization") and not srv["aggrete"] and not str(spec["url"]).startswith("http://127.") and not str(spec["url"]).startswith("http://localhost"):
-                finding("medium", "no-auth-header", f"'{name}' is a remote server with no Authorization header in the config",
-                        f"{spec['url']}. Either the server is unauthenticated, or sign-in happens elsewhere; the scan cannot tell.", name)
+            srv["_check_auth"] = bool(spec.get("url") and not (spec.get("headers") or {}).get("Authorization") and not srv["aggrete"]
+                                      and not str(spec["url"]).startswith(("http://127.", "http://localhost")))
             if connect and not dup:
                 try:
                     tools = _run(_list_tools(spec, timeout)); srv["status"] = "connected"
@@ -400,6 +415,16 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
                         finding("medium", "description-changed", f"Tool '{t['name']}' on '{name}' changed since it was last seen",
                                 "Its description or schema differs from the pinned fingerprint. A tool approved once that now behaves differently is a rug pull.", name,
                                 "Review the change; re-pin deliberately. The proxy enforces this at every call (tool_integrity.on_change).")
+            if srv.pop("_check_auth", False):
+                if srv["status"].startswith("unreachable: the server answered with an error") or "sign-in" in srv["status"]:
+                    pass   # it refused an anonymous handshake: sign-in happens in the client (OAuth). Not a finding.
+                elif srv["status"] == "connected":
+                    finding("high", "open-remote-server", f"'{name}' answered a full handshake with no credentials at all",
+                            f"{spec['url']} listed {len(srv['tools'])} tools to an anonymous client. Anyone who finds the URL can use it.", name,
+                            "Put it behind OAuth, or behind the proxy with an auth block.")
+                else:
+                    finding("info", "auth-unknown", f"'{name}' has no Authorization header in its config and could not be reached",
+                            f"{spec['url']}: {srv['status']}.", name)
             servers.append(srv)
 
     # cross-server combinations: the thing no per-server scanner prints
@@ -430,15 +455,26 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
                     None, "Route these servers through the proxy; `aggrete scan --fix` writes the rule for exactly this combination.")
     if has_proxy:
         for s in governed:
-            carries_data = bool(s["domains"] or s["writes"]) or s["status"] != "connected"
-            if carries_data:
-                finding("high", "bypasses-proxy", f"'{s['name']}' ({s['client']}) is reachable without going through Aggrete",
-                        f"{s['target']}. A policy is only a control if the proxy is the only path; this client has a second road."
-                        + ("" if s["status"] == "connected" else " It could not be inspected, so treat it as if it carried data."), s["name"],
+            if s["status"] == "connected" and s["domains"]:
+                finding("high", "bypasses-proxy", f"'{s['name']}' ({s['client']}) reaches company data without going through Aggrete",
+                        f"{s['target']}. Domains: {', '.join(s['domains'])}; writers: {', '.join(s['writes'][:3]) or 'none'}. A policy is only a control if the proxy is the only path.", s["name"],
                         "Remove the direct entry and expose the server as an upstream of the proxy instead (docs/DEPLOY.md, 'The only path').")
-            else:
+            elif s["status"] == "connected" and s["writes"]:
+                finding("medium", "writer-outside-proxy", f"'{s['name']}' ({s['client']}) can act on the world outside Aggrete",
+                        f"{s['target']}. No company-data tools recognised, but it writes: {', '.join(s['writes'][:3])}. A write tool is a way out if an assistant is ever steered.", s["name"],
+                        "Front it with the proxy so writes are refused after an untrusted read.")
+            elif s["status"] == "connected":
                 finding("info", "outside-proxy", f"'{s['name']}' ({s['client']}) runs outside Aggrete, but exposes no data domains",
                         f"{s['target']}. {len(s['tools'])} tools, none recognised as reading company data or writing out. A utility server; worth knowing, not a leak path.", s["name"])
+            else:
+                finding("medium", "outside-proxy-uninspected", f"'{s['name']}' ({s['client']}) runs outside Aggrete and could not be inspected",
+                        f"{s['target']}: {s['status']}. The scan cannot tell what it reaches; check it by hand or sign in and rescan.", s["name"])
+    else:
+        hint = "No Aggrete proxy is configured on this machine" + (" (the public demo does not count)" if any(x.get("demo") for x in servers) else "")
+        if governed:
+            findings.append({"severity": "info", "kind": "no-proxy", "title": f"{hint}; every server above is reached directly",
+                             "detail": "Nothing between the assistant and these systems applies a policy, remembers across calls, or writes an audit line.", "server": None,
+                             "fix": "aggrete scan --fix DIR writes a proxy config fronting them; pass --proxy <host> once it runs to check nothing bypasses it."})
     if check_scopes:
         for src in sources:
             for name, spec in src["servers"].items():

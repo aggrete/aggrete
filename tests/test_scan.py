@@ -59,6 +59,7 @@ def test_scan_finds_the_cross_server_paths(tmp_path):
     assert rep["summary"]["connected"] >= 4 and rep["summary"]["high"] >= 5
     assert {s["name"] for s in rep["servers"] if s["aggrete"]} == {"aggrete"}
     assert {s["name"] for s in rep["servers"] if s["dup"]} == {"notes"}           # same command as fixture, not connected twice
+    assert all(f["server"] in ("hr", "finance", "ops", "fixture") for f in rep["findings"] if f["kind"] == "bypasses-proxy")
     assert all(f["server"] != "aggrete" for f in rep["findings"] if f["kind"] == "bypasses-proxy")
     # pins: second run sees the same tools; a tampered pin is reported as changed
     pins = json.load(open(tmp_path / "pins.json")); key = next(k for k in pins if k.endswith("::oncall_draft")); pins[key] = "0" * 64
@@ -79,10 +80,25 @@ def test_reasons():
     assert scan._reason(Group([Group([TimeoutError()])]), {}) == "no answer within the timeout"
 
 
+def test_demo_proxy_does_not_count_and_plugins_are_not_duplicates(tmp_path):
+    home = tmp_path / "h"; proj = tmp_path / "p"; home.mkdir(); proj.mkdir()
+    (home / ".claude.json").write_text(json.dumps({"mcpServers": {"aggrete-demo": {"type": "http", "url": "https://try.aggrete.com/mcp"}, "hr": mock("hr")}}))
+    for n in ("a", "b"):
+        d = home / ".claude" / "plugins" / "marketplaces" / "m" / n; d.mkdir(parents=True)
+        (d / ".mcp.json").write_text(json.dumps({"mcpServers": {n: {"command": "bun", "args": ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "start"]}}}))
+    rep = scan.scan(home=home, cwd=proj, connect=False, pins_path=str(tmp_path / "pins.json"))
+    kinds = [f["kind"] for f in rep["findings"]]
+    assert "bypasses-proxy" not in kinds and "no-proxy" in kinds                 # the public demo is not your proxy
+    assert not any(s["dup"] for s in rep["servers"])                             # two plugins, same command, different roots
+    assert all("${CLAUDE_PLUGIN_ROOT}" not in s["target"] for s in rep["servers"])
+    rep2 = scan.scan(home=home, cwd=proj, connect=False, pins_path=str(tmp_path / "pins.json"), proxy_host="mcp.corp.example")
+    assert "no-proxy" not in [f["kind"] for f in rep2["findings"]]
+
+
 def test_no_connect_is_config_only(tmp_path):
     home, proj = setup(tmp_path)
     rep = scan.scan(home=home, cwd=proj, connect=False, pins_path=str(tmp_path / "pins.json"))
-    assert rep["summary"]["tools"] == 0 and {f["kind"] for f in rep["findings"]} >= {"secret-in-config", "bypasses-proxy"}
+    assert rep["summary"]["tools"] == 0 and {f["kind"] for f in rep["findings"]} >= {"secret-in-config", "outside-proxy-uninspected"}
     assert len(rep["not_visible"]) >= 3 and "claude.ai" in scan.render_text(rep)
 
 

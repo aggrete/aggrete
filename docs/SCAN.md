@@ -47,7 +47,9 @@ what any on-device scan can reach.
 | A secrets tool next to a writer | high | Credential exfiltration |
 | Hidden instructions in a tool description | high | Tool poisoning; the user never sees descriptions, the model does |
 | A credential in a client config | high | Anyone who reads the file holds it; every call carries it |
-| A server reachable without the proxy | high | A policy is only a control if the proxy is the only path |
+| A server with company-data tools reachable without the proxy | high | A policy is only a control if the proxy is the only path. Only when a real proxy is configured, or `--proxy <host>` is given; the public demo does not count |
+| A server outside the proxy that could not be inspected | medium | The scan cannot tell what it reaches; sign in and rescan |
+| A remote server that answers a full handshake with no credentials | high | Anyone who finds the URL can use it. OAuth servers that refuse an anonymous handshake are not flagged |
 | A tool changed since last seen | medium | A rug pull: approved once, different now |
 | A remote server with no Authorization header | medium | Unauthenticated, or signed in elsewhere; the scan cannot tell |
 | A GitHub token with write scopes on a read-only server | medium | With `--check-scopes`; one harmless `GET /user` |
