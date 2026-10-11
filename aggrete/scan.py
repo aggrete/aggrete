@@ -248,6 +248,29 @@ async def _list_tools(spec: dict, timeout: float) -> list[dict]:
     return await asyncio.wait_for(go(), timeout)
 
 
+def _reason(e: BaseException, spec: dict) -> str:
+    """The leaf cause of a connection failure, in words a person can act on."""
+    while isinstance(e, BaseExceptionGroup) and e.exceptions:
+        e = e.exceptions[0]
+    name = type(e).__name__
+    msg = " ".join(str(x) for x in (e, getattr(e, "message", ""), getattr(e, "data", ""), getattr(e, "code", "")) if x)
+    m = re.search(r"\b(401|403|404|407|500|502|503)\b", msg)
+    if m:
+        code = m.group(1)
+        return {"401": "HTTP 401, sign-in required (OAuth or a token the config does not carry)",
+                "403": "HTTP 403, forbidden with the credentials in the config",
+                "404": "HTTP 404, no MCP endpoint at that URL"}.get(code, f"HTTP {code}")
+    if isinstance(e, FileNotFoundError) or name == "FileNotFoundError":
+        return f"command not found: {spec.get('command')}"
+    if isinstance(e, (asyncio.TimeoutError, TimeoutError)) or "Timeout" in name:
+        return "no answer within the timeout"
+    if "Connect" in name or "connection" in msg.lower():
+        return "connection refused or host unreachable"
+    if name == "MCPError":
+        return "the server answered with an error during handshake" + (f" ({getattr(e, 'code', '')})" if getattr(e, "code", None) else "")
+    return f"{name}: {str(e)[:80]}" if str(e) else name
+
+
 def _run(coro):
     try:
         asyncio.get_running_loop()
@@ -306,7 +329,7 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
                 try:
                     tools = _run(_list_tools(spec, timeout)); srv["status"] = "connected"
                 except Exception as e:
-                    srv["status"] = f"unreachable ({type(e).__name__})"; tools = []
+                    srv["status"] = "unreachable: " + _reason(e, spec); tools = []
                 for t in tools:
                     fp = integrity.fingerprint(t["name"], t["description"], t["schema"])
                     st = pins.check(f"{name}::{t['name']}", fp)
@@ -462,7 +485,36 @@ def render_text(rep: dict) -> str:
             out.append(f"         fix: {f['fix']}")
     if rep["findings"]:
         out += ["", "  aggrete scan --fix ./aggrete   writes a proxy config and policy that close these."]
+    out += ["  --format table | md | json      same scan as a table, Markdown, or machine-readable JSON"]
     return "\n".join(out) + "\n"
+
+
+def render_table(rep: dict) -> str:
+    """Compact, aligned, no prose: one row per server, one row per finding."""
+    s = rep["summary"]
+    cut = lambda t, n: t if len(t) <= n else t[:n - 1] + "…"
+    rows = [["SERVER", "CLIENT", "STATUS", "DOMAINS", "WRITERS"]]
+    for x in rep["servers"]:
+        rows.append([cut(x["name"] + (" (aggrete)" if x["aggrete"] else ""), 26), cut(x["client"], 28), cut(x["status"], 40),
+                     cut(", ".join(x["domains"]) or "-", 44), cut(", ".join(x["writes"][:3]) + ("…" if len(x["writes"]) > 3 else "") or "-", 28)])
+    out = _table(rows)
+    out += f"\n{s['servers']} servers, {s['connected']} reachable, {s['tools']} tools. {s['high']} high, {s['medium']} medium, {s.get('info', 0)} info.\n"
+    if rep["findings"]:
+        frows = [["SEV", "FINDING", "SERVER", "KIND"]]
+        for f in rep["findings"]:
+            frows.append([f["severity"].upper(), cut(f["title"], 80), cut(f.get("server") or "-", 20), f["kind"]])
+        out += "\n" + _table(frows)
+    return out
+
+
+def _table(rows: list[list[str]]) -> str:
+    widths = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
+    lines = []
+    for n, r in enumerate(rows):
+        lines.append("  ".join(str(c).ljust(w) for c, w in zip(r, widths)).rstrip())
+        if n == 0:
+            lines.append("  ".join("-" * w for w in widths))
+    return "\n".join(lines) + "\n"
 
 
 def render_md(rep: dict) -> str:
@@ -484,12 +536,13 @@ def cli(argv: list[str]) -> int:
     ap.add_argument("--timeout", type=float, default=15.0)
     ap.add_argument("--proxy", default=None, help="host of your Aggrete proxy, to flag servers that bypass it")
     ap.add_argument("--check-scopes", action="store_true", help="compare a GitHub token's scopes with what its tools use (one GET /user)")
-    ap.add_argument("--format", choices=["text", "json", "md"], default="text")
+    ap.add_argument("--format", choices=["text", "table", "md", "json"], default="text",
+                    help="text (default, with explanations), table (compact), md (Markdown for a report), json (for CI)")
     ap.add_argument("--out", default=None)
     ap.add_argument("--fix", metavar="DIR", default=None, help="write proxy.config.yaml and coc.yaml that close the findings")
     ns = ap.parse_args(argv[1:])
     rep = scan(cwd=ns.dir, extra=ns.config, connect=not ns.no_connect, timeout=ns.timeout, proxy_host=ns.proxy, check_scopes=ns.check_scopes)
-    text = {"text": render_text, "json": lambda r: json.dumps(r, indent=2, default=list), "md": render_md}[ns.format](rep)
+    text = {"text": render_text, "table": render_table, "json": lambda r: json.dumps(r, indent=2, default=list), "md": render_md}[ns.format](rep)
     if ns.out:
         Path(ns.out).write_text(text); print(f"wrote {ns.out}")
     else:

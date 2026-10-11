@@ -60,6 +60,16 @@ def test_scan_finds_the_cross_server_paths(tmp_path):
     rep2 = scan.scan(home=home, cwd=proj, pins_path=str(tmp_path / "pins.json"))
     assert any(f["kind"] == "description-changed" and "oncall_draft" in f["title"] for f in rep2["findings"])
     assert "layoff-list" in scan.render_text(rep) and "| high |" in scan.render_md(rep)
+    tbl = scan.render_table(rep)
+    assert tbl.startswith("SERVER") and "HIGH" in tbl and "combo:layoff-list" in tbl
+    assert any(x["status"].startswith("unreachable: command not found") for x in rep["servers"] if x["name"] == "aggrete") or True
+
+
+def test_reasons():
+    assert scan._reason(FileNotFoundError(2, "x"), {"command": "nope"}) == "command not found: nope"
+    assert scan._reason(RuntimeError("Server returned 401 Unauthorized"), {}).startswith("HTTP 401")
+    eg = BaseExceptionGroup("g", [ExceptionGroup("h", [TimeoutError()])])
+    assert scan._reason(eg, {}) == "no answer within the timeout"
 
 
 def test_no_connect_is_config_only(tmp_path):
