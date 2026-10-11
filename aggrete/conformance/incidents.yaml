@@ -1,0 +1,120 @@
+# Named incidents and disclosures, 2025-2026, scored honestly against what a
+# policy proxy can do. "stopped" means the deterministic checks listed would
+# have refused the harmful step before it happened; "partial" means only the
+# part that goes through the proxy; "irrelevant" means it happens below or
+# outside a proxy (supply chain, host execution, sandbox), where a scanner or
+# the platform vendor is the right control. Verdicts cite the checks that
+# demonstrate them so a reader can rerun the evidence.
+incidents:
+  - id: ms-poisoned-tool-descriptions
+    date: 2026-06
+    title: Poisoned MCP tool descriptions make Copilot agents exfiltrate invoices
+    source: https://thehackernews.com/2026/06/microsoft-warns-poisoned-mcp-tool.html
+    cause: tool poisoning, exfiltration through an allowed channel
+    verdict: stopped
+    checks: [C07, C03]
+    why: Hidden instructions in a description are blocked on first sight (C07); the write that would carry the invoices out after reading them is refused by the flow rule (C03).
+  - id: comment-and-control
+    date: 2026-04
+    title: One PR-comment injection drives Claude Code, Gemini CLI and Copilot to leak API keys
+    source: https://repello.ai/blog/comment-and-control-claude-code-gemini-copilot-prompt-injection
+    cause: prompt injection, credential leak
+    verdict: partial
+    checks: [C03, C06]
+    why: The comment is untrusted content; any tool write afterwards is refused (C03) and a key in tool arguments never goes upstream (C06). Exfiltration through a raw shell in CI does not pass through the proxy and is not governed.
+  - id: cursor-pocketos-db
+    date: 2026-04
+    title: A coding agent wipes a production database and its backups in nine seconds
+    source: https://thenewstack.io/ai-agents-credential-crisis/
+    cause: over-permissioned credential, destructive action without approval
+    verdict: partial
+    checks: [C11, C04]
+    why: A destructive tool call can be held for a person (C11) or constrained by its arguments (C04) only when it goes through the proxy. The agent used a credential it found in a file and a raw CLI; neither is a tool call.
+  - id: meta-sev1-agent-post
+    date: 2026-03
+    title: An internal agent posts unapproved advice; a colleague acts on it and widens data access
+    source: https://oecd.ai/en/incidents/2026-03-18-fefc
+    cause: agent acting without approval
+    verdict: stopped
+    checks: [C11]
+    why: A write to a shared forum under an approve rule is held until the rule's owner signs off (C11). The human decision that followed is outside any proxy.
+  - id: anthropic-git-mcp-chain
+    date: 2026-01
+    title: Path traversal plus argument injection in the Git MCP server, from prompt injection alone
+    source: https://www.theregister.com/2026/01/20/anthropic_prompt_injection_flaws/
+    cause: prompt injection, server-side bugs
+    verdict: partial
+    checks: [C04, C03]
+    why: Argument-level rules (C04) can refuse paths outside an allowed root and option-like arguments; the flow rule (C03) refuses the write that follows the injected read. The server's own bugs are the server's to fix.
+  - id: ox-stdio-sdk-flaw
+    date: 2026-04
+    title: Every official MCP SDK's stdio transport turns configuration into command execution
+    source: https://the-agent-report.com/2026/07/mcp-security-landscape-2026-vulnerabilities-mitigations/
+    cause: supply chain, design flaw
+    verdict: irrelevant
+    checks: []
+    why: Happens when a client spawns a server process, below any proxy. A dependency scanner and the SDK patch are the controls. `aggrete scan` can list which configured servers are spawned over stdio.
+  - id: shai-hulud-mcp-registry
+    date: 2026-08
+    title: A worm spreads through a malicious server on the official MCP Registry
+    source: https://www.ox.security/blog/shai-hulud-outbreak-debrief-the-worm-evolves-into-mcp/
+    cause: supply chain
+    verdict: irrelevant
+    checks: []
+    why: Installing the package is the compromise. Registry vetting and dependency scanning are the controls; a proxy sees the server only after it is running.
+  - id: gitspawn
+    date: 2026-09
+    title: Untrusted repositories execute code through git hooks in coding agents, outside the sandbox
+    source: https://adversa.ai/blog/top-ai-coding-agent-security-resources-october-2026/
+    cause: host execution sink
+    verdict: irrelevant
+    checks: []
+    why: Git configuration runs on the host when the agent touches the repository. No tool call is involved. The agent vendor's sandbox is the control.
+  - id: plugin4shell
+    date: 2026-09
+    title: Pinned plugin commits are checked out without verifying the pin landed
+    source: https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/
+    cause: supply chain, pin not verified
+    verdict: irrelevant
+    checks: []
+    why: Plugin installation is outside the MCP call path. It does validate the pin-and-verify pattern that tool integrity (C07) applies to tool definitions.
+  - id: roguepilot
+    date: 2026-02
+    title: A GitHub issue makes Codespaces Copilot leak its token
+    source: https://orca.security/resources/blog/roguepilot-github-copilot-vulnerability/
+    cause: prompt injection, credential leak
+    verdict: irrelevant
+    checks: []
+    why: The exfiltration used a schema URL download inside the client, not a tool call. The client vendor fixed it.
+  - id: fastmcp-oauth-confused-deputy
+    date: 2026-03
+    title: An OAuth proxy in FastMCP lets a token issued for one client be replayed as another
+    source: https://bex.co/blog/2026/10/02/mcp-oauth2-agent-identity-problem
+    cause: misconfiguration, confused deputy
+    verdict: irrelevant
+    checks: [C10]
+    why: A bug in a different server's auth layer. Aggrete's own design never forwards a caller's token upstream (C10), which is the class of mistake involved.
+  - id: claude-code-deny-rule-bug
+    date: 2026-04
+    title: A client-side deny rule silently stopped applying after fifty subcommands
+    source: https://venturebeat.com/security/six-exploits-broke-ai-coding-agents-iam-never-saw-them
+    cause: client-side policy bug
+    verdict: irrelevant
+    checks: []
+    why: A policy that lives inside the client fails with the client. This is the argument for enforcing outside the process, which is what a proxy is; it is not something a proxy fixes in the client.
+  - id: exposed-ai-services-scan
+    date: 2026-05
+    title: A million exposed AI services, two in five MCP servers with no authentication
+    source: https://thehackernews.com/2026/05/we-scanned-1-million-exposed-ai.html
+    cause: misconfiguration
+    verdict: irrelevant
+    checks: []
+    why: Servers listening on the internet with no auth. The proxy refuses to serve HTTP without an auth block (C10), but it cannot close someone else's open port. `aggrete scan` flags remote servers with no auth header.
+  - id: ai-recommendation-poisoning
+    date: 2026-02
+    title: Summarize-with-AI buttons plant persistent instructions in assistant memory
+    source: https://www.microsoft.com/en-us/security/blog/2026/02/10/ai-recommendation-poisoning/
+    cause: memory poisoning
+    verdict: irrelevant
+    checks: []
+    why: The poison lives in the assistant's own memory, which no proxy sees. The flow rule limits what a poisoned session can send out (C03) but does not clean the memory.

@@ -18,7 +18,14 @@ def test_every_check_passes_and_frameworks_are_consistent():
             assert set(ctl["checks"]) <= ids, ctl
             if not ctl["checks"]:
                 assert ctl["note"], f"{f['id']} {ctl['id']} has neither checks nor a note"
+    assert rep["incident_summary"]["stopped"] >= 2 and rep["incident_summary"]["irrelevant"] >= 5    # honest, not a marketing table
+    for i in rep["incidents"]:
+        assert i["verdict"] in ("stopped", "partial", "irrelevant") and i["source"].startswith("http") and i["why"]
+        assert i["evidence"] in ("holds", "n/a"), i
+        if i["verdict"] in ("stopped", "partial"):
+            assert i["checks"], i["id"]
     md = conformance.render_md(rep); txt = conformance.render_text(rep)
+    assert "## Named incidents" in md and "irrelevant" in txt
     assert "| C11 |" in md and "AIUC-1" in md and "C11" in txt
     json.dumps(rep)
 

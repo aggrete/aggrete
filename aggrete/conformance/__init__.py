@@ -327,12 +327,17 @@ def run() -> dict:
                        "summary": {"controls": n, "pass": p, "partial": pa,
                                    "n/a": sum(r["status"] == "n/a" for r in rows),
                                    "fail": sum(r["status"] == "fail" for r in rows)}})
+    inc = yaml.safe_load(resources.files(__name__).joinpath("incidents.yaml").read_text())["incidents"]
+    for i in inc:
+        bad = [c for c in i.get("checks") or [] if by_id.get(c, {}).get("status") != "pass"]
+        i["evidence"] = "n/a" if not i.get("checks") else ("holds" if not bad else f"check(s) failing: {', '.join(bad)}")
     try:
         from importlib.metadata import version
         ver = version("aggrete")
     except Exception:
         ver = "0"
-    return {"aggrete": ver, "generated": time.strftime("%Y-%m-%d"), "checks": results, "frameworks": out_fw}
+    return {"aggrete": ver, "generated": time.strftime("%Y-%m-%d"), "checks": results, "frameworks": out_fw, "incidents": inc,
+            "incident_summary": {k: sum(i["verdict"] == k for i in inc) for k in ("stopped", "partial", "irrelevant")}}
 
 
 def render_text(rep: dict) -> str:
@@ -340,6 +345,11 @@ def render_text(rep: dict) -> str:
     for r in rep["checks"]:
         out.append(f"  {r['status'].upper():7} {r['id']}  {r['title']}")
         out.append(f"          {r['evidence']}")
+    sm = rep.get("incident_summary", {})
+    if rep.get("incidents"):
+        out += ["", f"Named incidents: {sm.get('stopped',0)} stopped, {sm.get('partial',0)} partial, {sm.get('irrelevant',0)} irrelevant"]
+        for i in rep["incidents"]:
+            out.append(f"  {i['verdict']:10} {i['date']}  {i['title']}  ({', '.join(i.get('checks') or []) or '-'})")
     for f in rep["frameworks"]:
         s = f["summary"]
         out += ["", f"{f['name']}: {s['pass']} pass, {s['partial']} partial, {s['n/a']} n/a, {s['fail']} fail of {s['controls']}"]
@@ -365,6 +375,13 @@ def render_md(rep: dict) -> str:
                 "", "| Control | Title | Status | Demonstrated by | Note |", "|---|---|---|---|---|"]
         for c in f["controls"]:
             out.append(f"| {c['id']} | {c['title']} | {c['status']} | {', '.join(c['checks'])} | {c['note']} |")
+    sm = rep.get("incident_summary", {})
+    out += ["", "## Named incidents, 2025 to 2026", "",
+            f"Scored against what a policy proxy can do: **{sm.get('stopped',0)} stopped, {sm.get('partial',0)} partial, {sm.get('irrelevant',0)} irrelevant**. "
+            "The irrelevant ones are supply chain, host execution and sandbox problems, where a dependency scanner or the platform vendor is the right control. "
+            "Each verdict cites the checks that demonstrate it.", "",
+            "| When | Incident | Cause | Verdict | Shown by | Why |", "|---|---|---|---|---|---|"]
+    out += [f"| {i['date']} | [{i['title']}]({i['source']}) | {i['cause']} | {i['verdict']} | {', '.join(i.get('checks') or []) or '-'} | {i['why']} |" for i in rep.get("incidents", [])]
     out += ["", "## Reading the statuses", "",
             "- **pass**: every mapped check ran against the real components and held.",
             "- **partial**: the checks hold, but the control is broader than what a policy proxy can enforce; the note says what is out of scope.",

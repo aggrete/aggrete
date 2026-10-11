@@ -59,6 +59,7 @@ Each call is fine alone. The third completes a forbidden set across three domain
 - **[Deploying](docs/DEPLOY.md)** — architecture, the deploy matrix, HTTP + OAuth, connecting Claude, and per-user credentials
 - **[Building a connector](docs/CONNECTORS.md)** — expose read/write tools and govern any system (Google Drive is the reference)
 - **[Adapter mode](docs/ADAPTERS.md)** — run the engine inside agentgateway (native ExtMCP over gRPC, `aggrete extmcp`), Docker MCP Gateway, IBM ContextForge or any AuthZEN-speaking gateway
+- **[What it does not stop](docs/LIMITS.md)** — supply chain, host execution, client bugs, memory poisoning: where a proxy is the wrong control and what is
 - **[Scanning](docs/SCAN.md)** — `aggrete scan` hardens an existing MCP setup: cross-server leak paths, poisoned descriptions, secrets in configs, proxy bypasses, and a one-command fix
 - **[Conformance](docs/CONFORMANCE.md)** — `aggrete conformance` runs sixteen checks against the real components and maps them onto the OWASP MCP Top 10, OWASP Agentic Top 10, CoSAI and AIUC-1; `--url` runs the same scenarios black-box against any gateway ([latest report](docs/conformance-report.md))
 - **[Roadmap](ROADMAP.md)** — shipped, in progress, and planned
