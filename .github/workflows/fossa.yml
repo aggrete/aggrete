@@ -27,8 +27,12 @@ jobs:
         if: env.FOSSA_API_KEY != ''
         with:
           api-key: ${{ env.FOSSA_API_KEY }}
+      # Policy test: reports issues but does not block yet. A push-only key cannot
+      # show which dependencies are flagged; review them in the FOSSA UI, tune the
+      # policy there, then drop continue-on-error to make this gate PRs.
       - uses: fossas/fossa-action@v1
         if: env.FOSSA_API_KEY != ''
+        continue-on-error: true
         with:
           api-key: ${{ env.FOSSA_API_KEY }}
           run-tests: true
