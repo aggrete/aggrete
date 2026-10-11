@@ -354,9 +354,15 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
                     None, "Route these servers through the proxy; `aggrete scan --fix` writes the rule for exactly this combination.")
     if has_proxy:
         for s in governed:
-            finding("high", "bypasses-proxy", f"'{s['name']}' ({s['client']}) is reachable without going through Aggrete",
-                    f"{s['target']}. A policy is only a control if the proxy is the only path; this client has a second road.", s["name"],
-                    "Remove the direct entry and expose the server as an upstream of the proxy instead (docs/DEPLOY.md, 'The only path').")
+            carries_data = bool(s["domains"] or s["writes"]) or s["status"] != "connected"
+            if carries_data:
+                finding("high", "bypasses-proxy", f"'{s['name']}' ({s['client']}) is reachable without going through Aggrete",
+                        f"{s['target']}. A policy is only a control if the proxy is the only path; this client has a second road."
+                        + ("" if s["status"] == "connected" else " It could not be inspected, so treat it as if it carried data."), s["name"],
+                        "Remove the direct entry and expose the server as an upstream of the proxy instead (docs/DEPLOY.md, 'The only path').")
+            else:
+                finding("info", "outside-proxy", f"'{s['name']}' ({s['client']}) runs outside Aggrete, but exposes no data domains",
+                        f"{s['target']}. {len(s['tools'])} tools, none recognised as reading company data or writing out. A utility server; worth knowing, not a leak path.", s["name"])
     if check_scopes:
         for src in sources:
             for name, spec in src["servers"].items():
@@ -379,7 +385,8 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
             "servers": servers, "findings": findings, "proxy_present": has_proxy,
             "summary": {"servers": len(servers), "connected": sum(s["status"] == "connected" for s in servers),
                         "tools": sum(len(s["tools"]) for s in servers),
-                        "high": sum(f["severity"] == "high" for f in findings), "medium": sum(f["severity"] == "medium" for f in findings)}}
+                        "high": sum(f["severity"] == "high" for f in findings), "medium": sum(f["severity"] == "medium" for f in findings),
+                        "info": sum(f["severity"] == "info" for f in findings)}}
 
 
 # ---------- fix ----------
@@ -443,7 +450,7 @@ def render_text(rep: dict) -> str:
     s = rep["summary"]
     out = [f"aggrete scan, {rep['generated']}", "",
            f"  {s['servers']} MCP servers across {len(rep['sources'])} client configs, {s['connected']} reachable, {s['tools']} tools",
-           f"  {s['high']} high, {s['medium']} medium findings" + ("" if rep["findings"] else "  (nothing to report)"), ""]
+           f"  {s['high']} high, {s['medium']} medium, {s.get('info', 0)} informational" + ("" if rep["findings"] else "  (nothing to report)"), ""]
     for srv in rep["servers"]:
         tag = " [aggrete]" if srv["aggrete"] else (" [duplicate]" if srv["dup"] else "")
         out.append(f"  {srv['name']:<22} {srv['client']:<28} {srv['status']:<24}{tag}")
