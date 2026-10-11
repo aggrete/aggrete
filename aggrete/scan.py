@@ -250,7 +250,8 @@ async def _list_tools(spec: dict, timeout: float) -> list[dict]:
 
 def _reason(e: BaseException, spec: dict) -> str:
     """The leaf cause of a connection failure, in words a person can act on."""
-    while isinstance(e, BaseExceptionGroup) and e.exceptions:
+    # Exception groups (3.11+ builtin, anyio backport on 3.10): walk to the first leaf
+    while getattr(e, "exceptions", None):
         e = e.exceptions[0]
     name = type(e).__name__
     msg = " ".join(str(x) for x in (e, getattr(e, "message", ""), getattr(e, "data", ""), getattr(e, "code", "")) if x)

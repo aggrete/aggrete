@@ -68,8 +68,9 @@ def test_scan_finds_the_cross_server_paths(tmp_path):
 def test_reasons():
     assert scan._reason(FileNotFoundError(2, "x"), {"command": "nope"}) == "command not found: nope"
     assert scan._reason(RuntimeError("Server returned 401 Unauthorized"), {}).startswith("HTTP 401")
-    eg = BaseExceptionGroup("g", [ExceptionGroup("h", [TimeoutError()])])
-    assert scan._reason(eg, {}) == "no answer within the timeout"
+    class Group(Exception):                  # the shape of an exception group, on every Python we support
+        def __init__(self, exceptions): self.exceptions = exceptions
+    assert scan._reason(Group([Group([TimeoutError()])]), {}) == "no answer within the timeout"
 
 
 def test_no_connect_is_config_only(tmp_path):
