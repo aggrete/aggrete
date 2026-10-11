@@ -23,6 +23,11 @@ def setup(tmp_path):
                                                    "projects": {str(proj): {"mcpServers": {"ops": mock("ops")}}}}))
     (proj / ".mcp.json").write_text(json.dumps({"mcpServers": {"fixture": mock("fixture"), "aggrete": {"command": "python3", "args": ["-m", "aggrete.proxy", "--config", "x.yaml"]}}}))
     (home / ".codex").mkdir(); (home / ".codex" / "config.toml").write_text('[mcp_servers.notes]\ncommand = "python3"\nargs = ["-m", "aggrete._mockco", "--profile", "fixture"]\n')
+    pl = home / ".claude" / "plugins" / "synced" / "abc" / "figma~g2"; pl.mkdir(parents=True)
+    (pl / ".mcp.json").write_text(json.dumps({"mcpServers": {"figma": {"type": "http", "url": "https://mcp.figma.com/mcp"}}}))
+    tr = home / ".claude" / "plugins" / ".trash" / "x"; tr.mkdir(parents=True); (tr / ".mcp.json").write_text(json.dumps({"mcpServers": {"old": {"url": "https://old.example/mcp"}}}))
+    ext = home / "Library/Application Support/Claude/Claude Extensions/com.example.notes"; ext.mkdir(parents=True)
+    (ext / "manifest.json").write_text(json.dumps({"name": "notes-ext", "server": {"type": "node", "mcp_config": {"command": "node", "args": ["server.js"]}}}))
     return home, proj
 
 
@@ -41,8 +46,9 @@ def test_discovery_reads_every_client(tmp_path):
     home, proj = setup(tmp_path)
     src = scan.discover(home, proj)
     clients = {s["client"].split(" (")[0] for s in src}
-    assert clients == {"Claude Code", "Codex"}
-    assert sum(len(s["servers"]) for s in src) == 6
+    assert clients == {"Claude Code", "Codex", "Claude Code plugin figma", "Claude Desktop extension"}
+    assert sum(len(s["servers"]) for s in src) == 8                 # the trashed plugin is not counted
+    assert any(s["client"] == "Claude Desktop extension" and "notes-ext" in s["servers"] for s in src)
 
 
 def test_scan_finds_the_cross_server_paths(tmp_path):
@@ -77,6 +83,7 @@ def test_no_connect_is_config_only(tmp_path):
     home, proj = setup(tmp_path)
     rep = scan.scan(home=home, cwd=proj, connect=False, pins_path=str(tmp_path / "pins.json"))
     assert rep["summary"]["tools"] == 0 and {f["kind"] for f in rep["findings"]} >= {"secret-in-config", "bypasses-proxy"}
+    assert len(rep["not_visible"]) >= 3 and "claude.ai" in scan.render_text(rep)
 
 
 def test_fix_writes_a_policy_that_lints_and_passes_its_tests(tmp_path):

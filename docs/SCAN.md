@@ -14,10 +14,28 @@ aggrete scan --fix ./aggrete        # write the proxy config and policy that clo
 
 ## What it reads
 
-Claude Code (user, project, local and managed), Claude Desktop, Cursor,
-VS Code and Copilot, Windsurf, Gemini CLI, Codex, and any file passed with
-`--config`. Nothing is modified. Pins for tool fingerprints are kept in
-`~/.aggrete/scan-pins.json`.
+Claude Code (user, project, local and managed configs, and every installed
+plugin's own server list), Claude Desktop extensions (the manifest inside
+each `.mcpb` bundle) and its agent-mode session configs, Cursor, VS Code and
+Copilot (both the `mcp.json` file and `mcp.servers` in settings), Cline, Zed,
+Windsurf, Gemini CLI, Codex, and any file passed with `--config`. Nothing is
+modified. Pins for tool fingerprints are kept in `~/.aggrete/scan-pins.json`.
+
+## What it cannot see, and says so
+
+Some connector surfaces are not on the machine at all. The report lists them
+under "Not visible from this machine" with where to inventory each:
+
+| Surface | Why | Where to look |
+|---|---|---|
+| claude.ai connectors (web, Desktop, Cowork) | stored in your Claude account | Settings, then Connectors; org-wide in the admin console. With enterprise-managed auth an admin can point every connector at the proxy. |
+| ChatGPT apps and connectors | stored in your OpenAI account | Settings, then Apps, or the workspace admin console |
+| Microsoft 365 Copilot connectors and agents | tenant-side | the Microsoft 365 admin center and Agent 365 |
+| Servers registered by IDE extensions at runtime | no config file | the client's own server list in its UI |
+
+A machine with thirty connectors in claude.ai and three in local configs will
+report three servers and four invisible surfaces. That is the honest count of
+what any on-device scan can reach.
 
 ## What it reports
 

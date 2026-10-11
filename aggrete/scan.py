@@ -115,10 +115,62 @@ def discover(home: Path | None = None, cwd: Path | None = None, extra: list[str]
             add("Codex", p, _toml_servers(p))
         except Exception:
             pass
+    # Claude Code plugins (marketplace and synced): each ships its own .mcp.json
+    plug = home / ".claude" / "plugins"
+    if plug.is_dir():
+        for mp in sorted(plug.rglob(".mcp.json")):
+            if ".trash" in mp.parts:
+                continue
+            d = _json(mp) or {}
+            add(f"Claude Code plugin {mp.parent.name.split('~')[0]}", mp, d.get("mcpServers") or {})
+    # Claude Desktop extensions (.mcpb / DXT bundles): manifest.json carries the server
+    for extdir in (home / "Library/Application Support/Claude/Claude Extensions",
+                   home / "AppData/Roaming/Claude/Claude Extensions", home / ".config/Claude/Claude Extensions"):
+        if extdir.is_dir():
+            for mf in sorted(extdir.glob("*/manifest.json")):
+                d = _json(mf) or {}
+                srv = (d.get("server") or {}).get("mcp_config") or {}
+                if srv:
+                    add("Claude Desktop extension", mf, {d.get("name") or mf.parent.name: srv})
+    # Claude Desktop agent mode (Cowork) keeps a copy of the servers each session ran
+    sess = home / "Library/Application Support/Claude/local-agent-mode-sessions"
+    if sess.is_dir():
+        seen: set = set()
+        for cj2 in sess.rglob(".claude.json"):
+            d = _json(cj2) or {}
+            for name, spec in (d.get("mcpServers") or {}).items():
+                k = json.dumps(spec, sort_keys=True, default=str)
+                if k not in seen:
+                    seen.add(k); add("Claude Desktop (agent mode)", cj2, {name: spec})
+    # VS Code settings.json `mcp.servers` (older layout); Cline; Continue; Zed; Goose
+    for p in (home / "Library/Application Support/Code/User/settings.json", home / ".config/Code/User/settings.json"):
+        if p.exists():
+            try:
+                t = re.sub(r"^\s*//.*$", "", p.read_text(), flags=re.M); t = re.sub(r",(\s*[}\]])", r"\1", t)
+                d = json.loads(t); add("VS Code settings", p, ((d.get("mcp") or {}).get("servers")) or {})
+            except Exception:
+                pass
+    for client, p, key in (("Cline", home / "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", "mcpServers"),
+                           ("Zed", home / ".config/zed/settings.json", "context_servers")):
+        d = _json(p) or {}
+        add(client, p, d.get(key) or {})
     for e in extra or []:
         ep = Path(e).expanduser(); d = _json(ep) or {}
         add(f"file {ep.name}", ep, d.get("mcpServers") or d.get("servers") or {})
     return found
+
+
+# Connector surfaces that are not on disk. The scan says so rather than seeing less quietly.
+NOT_VISIBLE = [
+    ("claude.ai connectors (web, Desktop, Cowork)", "stored in your Claude account, not on this machine",
+     "claude.ai -> Settings -> Connectors; org-wide at claude.ai/admin-settings. With enterprise-managed auth an admin can point every connector at the proxy."),
+    ("ChatGPT apps and connectors", "stored in your OpenAI account",
+     "ChatGPT -> Settings -> Apps, or the workspace admin console."),
+    ("Microsoft 365 Copilot connectors and agents", "tenant-side, in Entra and Agent 365",
+     "Microsoft 365 admin center -> Copilot; Agent 365 for the inventory."),
+    ("IDE-extension-provided servers (VS Code, JetBrains)", "registered by extensions at runtime, not in a config file",
+     "the client's own MCP server list in its UI."),
+]
 
 
 # ---------- classification ----------
@@ -406,6 +458,7 @@ def scan(home=None, cwd=None, extra=None, connect=True, timeout=15.0, pins_path:
     order = {"high": 0, "medium": 1, "info": 2}
     findings.sort(key=lambda f: order.get(f["severity"], 3))
     return {"generated": time.strftime("%Y-%m-%d %H:%M"), "sources": [{"client": s["client"], "path": s["path"], "servers": len(s["servers"])} for s in sources],
+            "not_visible": [{"surface": a, "why": b, "where": c} for a, b, c in NOT_VISIBLE],
             "servers": servers, "findings": findings, "proxy_present": has_proxy,
             "summary": {"servers": len(servers), "connected": sum(s["status"] == "connected" for s in servers),
                         "tools": sum(len(s["tools"]) for s in servers),
@@ -484,6 +537,9 @@ def render_text(rep: dict) -> str:
         out += ["", f"  {f['severity'].upper():6} {f['title']}", f"         {f['detail']}"]
         if f.get("fix"):
             out.append(f"         fix: {f['fix']}")
+    if rep.get("not_visible"):
+        out += ["", "  Not visible from this machine (inventory them where they live):"]
+        out += [f"    {a['surface']}: {a['why']}. See {a['where']}" for a in rep["not_visible"]]
     if rep["findings"]:
         out += ["", "  aggrete scan --fix ./aggrete   writes a proxy config and policy that close these."]
     out += ["  --format table | md | json      same scan as a table, Markdown, or machine-readable JSON"]
