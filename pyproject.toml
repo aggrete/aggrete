@@ -22,7 +22,8 @@ dependencies = [
   "mcp>=2.0",
   "pyyaml>=6",
   "pyjwt[crypto]>=2.8",
-  "starlette>=0.40",
+  "starlette>=1.8.0; python_version >= '3.11'",
+  "starlette>=1.7.0; python_version < '3.11'",
   "uvicorn>=0.30",
   "python-multipart>=0.0.18",
 ]
